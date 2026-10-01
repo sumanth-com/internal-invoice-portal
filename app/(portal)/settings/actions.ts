@@ -15,6 +15,7 @@ import {
   emptyBankFormState,
   emptyBankMutationState,
   emptyCompanyFormState,
+  emptyCurrencyFormState,
   emptyGstFormState,
   emptyLogoState,
   emptyNumberingFormState,
@@ -25,6 +26,7 @@ import {
   numberingFloor,
   parseBankForm,
   parseCompanyForm,
+  parseCurrencyForm,
   parseGstForm,
   parseNextNumber,
   sequenceSuffix,
@@ -34,6 +36,7 @@ import {
   type BankRow,
   type CompanyFormState,
   type CompanyRow,
+  type CurrencyFormState,
   type GstFormState,
   type LogoState,
   type NumberingFormState,
@@ -83,7 +86,11 @@ export async function saveCompanySettings(
   if (!row) {
     const inserted = await supabase
       .from("company_settings")
-      .insert({ id: true, ...parsed.value })
+      .insert({
+        id: true,
+        ...parsed.value,
+        default_currency: "INR",
+      })
       .select(COMPANY_COLUMNS);
     if (inserted.error || !inserted.data?.[0]) {
       return {
@@ -134,7 +141,7 @@ export async function saveGstDefaults(
     .from("company_settings")
     .update(parsed.value)
     .eq("id", true)
-    .select("default_gst_enabled, default_gst_rate");
+    .select("default_gst_enabled, default_gst_rate, gstin, pan");
 
   if (updated.error || !updated.data?.[0]) {
     return {
@@ -151,8 +158,48 @@ export async function saveGstDefaults(
     saved: {
       defaultGstEnabled: Boolean(saved.default_gst_enabled),
       defaultGstRate: Number(saved.default_gst_rate),
+      gstin: saved.gstin?.trim() ?? "",
+      pan: saved.pan?.trim() ?? "",
     },
   };
+}
+
+export async function saveDefaultCurrency(
+  _state: CurrencyFormState,
+  formData: FormData,
+): Promise<CurrencyFormState> {
+  const denied = await adminDenied();
+  if (denied) return { ...emptyCurrencyFormState, error: denied };
+
+  const parsed = parseCurrencyForm(formData);
+  if (!parsed.ok) return { error: null, fieldErrors: parsed.fieldErrors };
+
+  const supabase = await createClient();
+  const existing = await supabase.from("company_settings").select("id").eq("id", true).maybeSingle();
+  if (existing.error) {
+    return {
+      ...emptyCurrencyFormState,
+      error: settingsErrorMessage(existing.error, "Currency could not be saved."),
+    };
+  }
+  if (!existing.data) {
+    return { ...emptyCurrencyFormState, error: "Save company details before changing the currency." };
+  }
+
+  const updated = await supabase
+    .from("company_settings")
+    .update({ default_currency: parsed.value })
+    .eq("id", true)
+    .select("default_currency");
+  if (updated.error || !updated.data?.[0]) {
+    return {
+      ...emptyCurrencyFormState,
+      error: settingsErrorMessage(updated.error, "Currency could not be saved."),
+    };
+  }
+
+  revalidatePortalSettings();
+  return { error: null, fieldErrors: {}, saved: updated.data[0].default_currency };
 }
 
 async function removeLogoObjects(

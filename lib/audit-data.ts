@@ -1,11 +1,14 @@
+import { currentMonthRange } from "@/lib/invoice";
 import {
   AUDIT_PAGE_SIZE,
   describeAuditMetadata,
+  INVOICE_AUDIT_ACTIONS,
   isAuditAction,
   kolkataDayStart,
   kolkataNextDayStart,
   normalizeAuditAction,
   normalizeAuditDate,
+  normalizeAuditGroup,
   normalizeAuditPage,
   normalizeAuditSearch,
   normalizeAuditUser,
@@ -90,6 +93,7 @@ function filteredEntries(
   supabase: Awaited<ReturnType<typeof createClient>>,
   filters: {
     action: AuditLogPage["action"];
+    group: AuditLogPage["group"];
     user: string;
     from: string;
     to: string;
@@ -103,6 +107,8 @@ function filteredEntries(
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
 
+  if (filters.group === "invoice") query = query.in("action", [...INVOICE_AUDIT_ACTIONS]);
+  if (filters.group === "payment") query = query.in("action", [...PAYMENT_AUDIT_ACTIONS]);
   if (filters.action !== "all") query = query.eq("action", filters.action);
   if (filters.user !== "all") query = query.eq("actor_id", filters.user);
   if (filters.from) query = query.gte("created_at", kolkataDayStart(filters.from));
@@ -140,6 +146,7 @@ async function searchTargets(
 export async function loadAuditLog(raw: {
   q?: string;
   action?: string;
+  group?: string;
   user?: string;
   from?: string;
   to?: string;
@@ -147,14 +154,16 @@ export async function loadAuditLog(raw: {
 }): Promise<AuditLogPage> {
   const search = normalizeAuditSearch(raw.q);
   const action = normalizeAuditAction(raw.action);
+  const group = normalizeAuditGroup(raw.group);
   const user = normalizeAuditUser(raw.user);
-  const from = normalizeAuditDate(raw.from);
-  const to = normalizeAuditDate(raw.to);
+  const month = currentMonthRange();
+  const from = normalizeAuditDate(raw.from) || month.from;
+  const to = normalizeAuditDate(raw.to) || month.to;
   const page = normalizeAuditPage(raw.page);
   const supabase = await createClient();
   const today = invoiceToday();
 
-  const listFilters = { action, user, from, to, page, searchFilters: null };
+  const listFilters = { action, group, user, from, to, page, searchFilters: null };
   const [total, todayCount, paymentEvents, usersResult, searchFilters, initialList] = await Promise.all([
     countEvents(supabase),
     countEvents(supabase, {
@@ -183,6 +192,7 @@ export async function loadAuditLog(raw: {
     page,
     search,
     action,
+    group,
     user,
     from,
     to,

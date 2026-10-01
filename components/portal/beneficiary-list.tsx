@@ -1,14 +1,30 @@
 "use client";
 
-import type { Beneficiary, BeneficiaryListData, BeneficiarySummary } from "@/lib/beneficiary";
+import { fetchBeneficiary } from "@/app/(portal)/beneficiaries/actions";
+import { DeleteBeneficiaryDialog } from "@/components/portal/delete-beneficiary-button";
+import { IconAction } from "@/components/portal/icon-action";
+import { BeneficiaryNotice } from "@/components/portal/beneficiary-notice";
+import { useBeneficiarySaved, usePortalModals } from "@/components/portal/portal-modals";
+import { Modal, ModalBody, ModalFooter } from "@/components/portal/modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BeneficiaryNotice } from "@/components/portal/beneficiary-notice";
-import { useBeneficiarySaved, usePortalModals } from "@/components/portal/portal-modals";
-import { Plus, Search } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import {
+  beneficiaryListHref,
+  formatBeneficiaryAddress,
+  formatBeneficiaryDate,
+  type Beneficiary,
+  type BeneficiaryListData,
+  type BeneficiaryStatusFilter,
+  type BeneficiarySummary,
+} from "@/lib/beneficiary";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+
+const fieldClass =
+  "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -22,19 +38,6 @@ function StatCard({ label, value }: { label: string; value: number }) {
 function display(value: string | null) {
   const text = value?.trim();
   return text || "—";
-}
-
-function emptyCopy(data: BeneficiaryListData) {
-  if (data.search && data.status === "active") {
-    return `No active beneficiaries match “${data.search}”.`;
-  }
-  if (data.search && data.status === "inactive") {
-    return `No inactive beneficiaries match “${data.search}”.`;
-  }
-  if (data.search) return `No beneficiaries match “${data.search}”.`;
-  if (data.status === "active") return "No active beneficiaries.";
-  if (data.status === "inactive") return "No inactive beneficiaries.";
-  return "No beneficiaries yet.";
 }
 
 function toSummary(beneficiary: Beneficiary): BeneficiarySummary {
@@ -63,8 +66,7 @@ function applySaved(data: BeneficiaryListData, saved: BeneficiarySummary): Benef
     inactive += saved.isActive ? -1 : 1;
   }
 
-  const matchesStatus =
-    data.status === "all" || (data.status === "active") === saved.isActive;
+  const matchesStatus = data.status === "all" || (data.status === "active") === saved.isActive;
   const others = data.beneficiaries.filter((item) => item.id !== saved.id);
   const beneficiaries = matchesStatus
     ? [...others, saved].sort((left, right) => left.legalName.localeCompare(right.legalName, "en"))
@@ -73,20 +75,68 @@ function applySaved(data: BeneficiaryListData, saved: BeneficiarySummary): Benef
   return { ...data, total, active, inactive, beneficiaries };
 }
 
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative shrink-0", className)}>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={cn(fieldClass, "pl-3 pr-8")}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  );
+}
+
+function DetailItem({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm">{children}</dd>
+    </div>
+  );
+}
+
 export function BeneficiaryList({
   data: serverData,
   notice,
+  deletableIds,
+  isAdmin,
 }: {
   data: BeneficiaryListData;
   notice: "created" | "updated" | "deleted" | null;
+  deletableIds: string[];
+  isAdmin: boolean;
 }) {
-  const { openBeneficiary } = usePortalModals();
+  const router = useRouter();
+  const { openBeneficiary, notify } = usePortalModals();
   const [source, setSource] = useState(serverData);
   const [data, setData] = useState(serverData);
+  const [search, setSearch] = useState(serverData.search);
+  const [status, setStatus] = useState<BeneficiaryStatusFilter>(serverData.status);
+  const [deleting, setDeleting] = useState<BeneficiarySummary | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewing, setViewing] = useState<Beneficiary | null>(null);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const viewRequest = useRef(0);
+  const deletable = new Set(deletableIds);
 
   if (source !== serverData) {
     setSource(serverData);
     setData(serverData);
+    setSearch(serverData.search);
+    setStatus(serverData.status);
   }
 
   useBeneficiarySaved((saved) => {
@@ -94,128 +144,270 @@ export function BeneficiaryList({
   });
 
   const filtering = data.search.length > 0 || data.status !== "all";
-  const showFirstEmpty = data.total === 0 && !filtering;
+  const emptyPortal = data.total === 0 && !filtering;
+
+  const pushFilters = useCallback(
+    (next?: { search?: string; status?: BeneficiaryStatusFilter }) => {
+      const href = beneficiaryListHref({
+        search: next?.search ?? search,
+        status: next?.status ?? status,
+      });
+      startTransition(() => router.push(href));
+    },
+    [search, status, router],
+  );
+
+  useEffect(() => {
+    const query = search.trim();
+    if (query === data.search) return;
+    const timer = window.setTimeout(() => pushFilters({ search: query }), 300);
+    return () => window.clearTimeout(timer);
+  }, [search, data.search, pushFilters]);
+
+  function openEditor(beneficiary: Beneficiary) {
+    setViewOpen(false);
+    openBeneficiary({ beneficiary });
+  }
+
+  async function editBeneficiary(id: string) {
+    if (editingId) return;
+    setEditingId(id);
+    const result = await fetchBeneficiary(id);
+    setEditingId(null);
+    if (!result.ok) {
+      notify(result.error, "error");
+      return;
+    }
+    openEditor(result.beneficiary);
+  }
+
+  async function viewBeneficiary(id: string) {
+    const request = viewRequest.current + 1;
+    viewRequest.current = request;
+    setViewing(null);
+    setViewError(null);
+    setViewOpen(true);
+    const result = await fetchBeneficiary(id);
+    if (request !== viewRequest.current) return;
+    if (!result.ok) {
+      setViewError(result.error);
+      return;
+    }
+    setViewing(result.beneficiary);
+  }
 
   return (
-    <>
-      {notice ? <BeneficiaryNotice notice={notice} /> : null}
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      {notice ? (
+        <div className="shrink-0">
+          <BeneficiaryNotice notice={notice} />
+        </div>
+      ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid shrink-0 gap-3 sm:grid-cols-3">
         <StatCard label="Total beneficiaries" value={data.total} />
         <StatCard label="Active" value={data.active} />
         <StatCard label="Inactive" value={data.inactive} />
       </div>
 
-      <section className="rounded-xl border bg-card shadow-sm">
-        <div className="flex flex-col gap-4 border-b p-4 md:flex-row md:items-center md:justify-between">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="flex shrink-0 flex-col gap-3 border-b p-4">
           <div>
-            <h2 className="text-base font-semibold">
-              {filtering ? "Matching beneficiaries" : "All beneficiaries"}
-            </h2>
+            <h2 className="text-base font-semibold">{filtering ? "Matching beneficiaries" : "All beneficiaries"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filtering
-                ? "Beneficiaries matching your search."
-                : "Active and inactive beneficiary records."}
+              {filtering ? "Beneficiaries matching your search." : "Active and inactive beneficiary records."}
             </p>
           </div>
-          <form action="/beneficiaries" className="flex w-full flex-col gap-2 sm:flex-row md:max-w-xl">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <form
+            className="flex items-center gap-2 overflow-x-auto"
+            onSubmit={(event) => {
+              event.preventDefault();
+              pushFilters({ search: search.trim() });
+            }}
+          >
+            <div className="relative min-w-56 flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                name="q"
-                defaultValue={data.search}
-                placeholder="Search name, contact, email, GSTIN, or PAN"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, contact, email, GSTIN, or PAN"
                 aria-label="Search beneficiaries"
-                className="pl-8"
+                className="h-9 py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
               />
             </div>
-            <select
-              name="status"
-              defaultValue={data.status}
-              aria-label="Beneficiary status"
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+            <FilterSelect
+              label="Status"
+              value={status}
+              onChange={(value) => {
+                const next: BeneficiaryStatusFilter =
+                  value === "active" || value === "inactive" ? value : "all";
+                setStatus(next);
+                pushFilters({ status: next });
+              }}
+              className="w-40"
             >
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
-            </select>
-            <Button type="submit" variant="secondary">
-              Search
-            </Button>
+            </FilterSelect>
           </form>
         </div>
 
-        {showFirstEmpty ? (
-          <div className="px-4 py-10">
-            <p className="text-sm text-muted-foreground">No beneficiaries yet.</p>
-            <Button type="button" className="mt-4" onClick={() => openBeneficiary()}>
-              <Plus />
-              Add beneficiary
-            </Button>
-          </div>
-        ) : data.beneficiaries.length === 0 ? (
-          <div className="px-4 py-10 text-sm text-muted-foreground">
-            <p>{emptyCopy(data)}</p>
-            <Link href="/beneficiaries" className="mt-2 inline-block underline">
-              Clear search
-            </Link>
+        {data.beneficiaries.length === 0 ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+            <p className="text-sm text-muted-foreground">No beneficiaries found</p>
+            {emptyPortal ? (
+              <Button type="button" className="mt-4" onClick={() => openBeneficiary()}>
+                <Plus />
+                Add beneficiary
+              </Button>
+            ) : null}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[48rem] text-sm">
-              <thead className="border-b text-left text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Company</th>
-                  <th className="px-4 py-3 font-medium">Contact</th>
-                  <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Phone</th>
-                  <th className="px-4 py-3 font-medium">GSTIN</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.beneficiaries.map((beneficiary) => (
-                  <tr key={beneficiary.id} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/beneficiaries/${beneficiary.id}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {beneficiary.legalName}
-                      </Link>
-                      {beneficiary.city ? (
-                        <p className="mt-1 text-xs font-normal text-muted-foreground">
-                          {beneficiary.city}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">{display(beneficiary.contactName)}</td>
-                    <td className="px-4 py-3">{display(beneficiary.email)}</td>
-                    <td className="px-4 py-3">{display(beneficiary.phone)}</td>
-                    <td className="px-4 py-3">{display(beneficiary.gstin)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={beneficiary.isActive ? "secondary" : "outline"}>
-                        {beneficiary.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="text-left text-muted-foreground">
+                    <th className="border-b bg-muted px-4 py-3 font-medium">Company</th>
+                    <th className="border-b bg-muted px-4 py-3 font-medium">Contact</th>
+                    <th className="border-b bg-muted px-4 py-3 font-medium">Email</th>
+                    <th className="border-b bg-muted px-4 py-3 font-medium">Phone</th>
+                    <th className="border-b bg-muted px-4 py-3 font-medium">GSTIN</th>
+                    <th className="border-b bg-muted px-4 py-3 font-medium">Status</th>
+                    <th className="border-b bg-muted px-4 py-3 text-right font-medium">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {data.truncated ? (
-              <p className="px-4 py-3 text-sm text-muted-foreground">
-                Showing the first {data.beneficiaries.length} beneficiaries. Refine the search to see more.
-              </p>
-            ) : (
-              <p className="px-4 py-3 text-sm text-muted-foreground">
-                {data.beneficiaries.length === 1
+                </thead>
+                <tbody>
+                  {data.beneficiaries.map((beneficiary) => (
+                    <tr key={beneficiary.id} className="hover:bg-muted/40">
+                      <td className="border-b px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => viewBeneficiary(beneficiary.id)}
+                          className="text-left underline-offset-4 hover:underline"
+                        >
+                          {beneficiary.legalName}
+                        </button>
+                        {beneficiary.city ? (
+                          <p className="mt-1 text-xs font-normal text-muted-foreground">{beneficiary.city}</p>
+                        ) : null}
+                      </td>
+                      <td className="border-b px-4 py-3">{display(beneficiary.contactName)}</td>
+                      <td className="border-b px-4 py-3">{display(beneficiary.email)}</td>
+                      <td className="border-b px-4 py-3 whitespace-nowrap">{display(beneficiary.phone)}</td>
+                      <td className="border-b px-4 py-3 whitespace-nowrap">{display(beneficiary.gstin)}</td>
+                      <td className="border-b px-4 py-3">
+                        <Badge variant={beneficiary.isActive ? "secondary" : "outline"}>
+                          {beneficiary.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="border-b px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <IconAction label="View" onClick={() => viewBeneficiary(beneficiary.id)}>
+                            <Eye />
+                          </IconAction>
+                          <IconAction label="Edit" onClick={() => editBeneficiary(beneficiary.id)}>
+                            <Pencil />
+                          </IconAction>
+                          {deletable.has(beneficiary.id) ? (
+                            <IconAction
+                              label="Delete"
+                              onClick={() => setDeleting(beneficiary)}
+                              className="hover:text-destructive"
+                            >
+                              <Trash2 />
+                            </IconAction>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="shrink-0 border-t px-4 py-3 text-sm text-muted-foreground">
+              {data.truncated
+                ? `Showing the first ${data.beneficiaries.length} beneficiaries. Refine the search to see more.`
+                : data.beneficiaries.length === 1
                   ? "1 beneficiary."
                   : `${data.beneficiaries.length} beneficiaries.`}
-              </p>
-            )}
+            </p>
           </div>
         )}
       </section>
-    </>
+
+      <Modal
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        title={viewing?.legalName ?? "Beneficiary"}
+        description={viewing ? undefined : "Loading beneficiary details."}
+      >
+        <ModalBody>
+          <div className="flex flex-col gap-5 p-4 sm:p-6">
+            {viewError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {viewError}
+              </p>
+            ) : !viewing ? (
+              <div className="grid gap-4 sm:grid-cols-2" aria-hidden>
+                {Array.from({ length: 6 }, (_, index) => (
+                  <span key={index} className="h-12 animate-pulse rounded-md bg-muted" />
+                ))}
+              </div>
+            ) : (
+              <>
+                <Badge variant={viewing.isActive ? "secondary" : "outline"} className="w-fit">
+                  {viewing.isActive ? "Active" : "Inactive"}
+                </Badge>
+                {isAdmin && !deletable.has(viewing.id) ? (
+                  <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+                    This beneficiary is used on invoices, so it cannot be deleted. Mark it inactive instead.
+                  </p>
+                ) : null}
+                <dl className="grid gap-5 sm:grid-cols-2">
+                  <DetailItem label="Contact person">{display(viewing.contactName)}</DetailItem>
+                  <DetailItem label="Email">{display(viewing.email)}</DetailItem>
+                  <DetailItem label="Phone">{display(viewing.phone)}</DetailItem>
+                  <DetailItem label="GSTIN">{display(viewing.gstin)}</DetailItem>
+                  <DetailItem label="PAN">{display(viewing.pan)}</DetailItem>
+                  <DetailItem label="Billing address">
+                    {formatBeneficiaryAddress(viewing).length > 0 ? (
+                      <span className="block whitespace-pre-line">{formatBeneficiaryAddress(viewing).join("\n")}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </DetailItem>
+                  <DetailItem label="Notes">
+                    <span className="block whitespace-pre-line">{display(viewing.notes)}</span>
+                  </DetailItem>
+                  <DetailItem label="Added">{formatBeneficiaryDate(viewing.createdAt)}</DetailItem>
+                </dl>
+              </>
+            )}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={() => setViewOpen(false)}>
+            Close
+          </Button>
+          {viewing ? (
+            <Button type="button" onClick={() => openEditor(viewing)}>
+              <Pencil />
+              Edit
+            </Button>
+          ) : null}
+        </ModalFooter>
+      </Modal>
+
+      <DeleteBeneficiaryDialog
+        id={deleting?.id ?? null}
+        name={deleting?.legalName ?? ""}
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+      />
+    </div>
   );
 }

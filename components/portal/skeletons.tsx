@@ -69,20 +69,32 @@ export function DetailSkeleton({ label }: { label: string }) {
   );
 }
 
+function SettingsCardSkeleton({ tall = false }: { tall?: boolean }) {
+  return (
+    <section className="h-full rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+      <Bar className="h-5 w-40" />
+      <Bar className="mt-2 h-4 w-72 max-w-full" />
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <Bar className="h-9" />
+        <Bar className="h-9" />
+        {tall ? <Bar className="h-9 sm:col-span-2" /> : null}
+      </div>
+    </section>
+  );
+}
+
 export function SettingsSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      {Array.from({ length: 5 }, (_, index) => (
-        <section key={index} className="rounded-xl border bg-card p-4 shadow-sm sm:p-6">
-          <Bar className="h-5 w-40" />
-          <Bar className="mt-2 h-4 w-72 max-w-full" />
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Bar className="h-9" />
-            <Bar className="h-9" />
-            <Bar className="h-9 sm:col-span-2" />
-          </div>
-        </section>
-      ))}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(16rem,0.85fr)]">
+        <SettingsCardSkeleton tall />
+        <SettingsCardSkeleton />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SettingsCardSkeleton tall />
+        <SettingsCardSkeleton />
+      </div>
+      <SettingsCardSkeleton tall />
       <p className="sr-only" role="status">
         Loading settings…
       </p>

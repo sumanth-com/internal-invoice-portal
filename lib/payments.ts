@@ -1,4 +1,5 @@
-import { isInvoiceId, roundMoney } from "@/lib/invoice";
+import { isBeneficiaryId } from "@/lib/beneficiary";
+import { currentMonthRange, isInvoiceId, roundMoney } from "@/lib/invoice";
 import {
   isPaymentMode,
   normalizePaymentDate,
@@ -7,6 +8,7 @@ import {
   PAYMENT_LIST_LIMIT,
   paymentBalance,
   type PayableInvoice,
+  type PaymentBeneficiaryOption,
   type PaymentListData,
   type PaymentRecord,
 } from "@/lib/payment";
@@ -15,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 export const PAYMENT_COLUMNS = `
   id, invoice_id, amount, payment_date, payment_mode, reference, created_at,
   invoices!inner (
-    invoice_number, currency,
+    invoice_number, currency, beneficiary_id,
     beneficiaries ( legal_name )
   ),
   profiles ( full_name, email )
@@ -34,6 +36,7 @@ export type PaymentRow = {
   invoices: Embedded<{
     invoice_number: string;
     currency: string;
+    beneficiary_id: string;
     beneficiaries: Embedded<{ legal_name: string }>;
   }>;
   profiles: Embedded<{ full_name: string | null; email: string | null }>;
@@ -57,6 +60,7 @@ export function mapPayment(row: PaymentRow): PaymentRecord {
     id: row.id,
     invoiceId: row.invoice_id,
     invoiceNumber: invoice?.invoice_number ?? "—",
+    beneficiaryId: invoice?.beneficiary_id ?? "",
     beneficiaryName: beneficiary?.legal_name?.trim() || "—",
     paymentDate: row.payment_date,
     paymentMode: isPaymentMode(row.payment_mode) ? row.payment_mode : "other",
@@ -90,16 +94,42 @@ async function invoiceIdsForSearch(
   return (data ?? []).map((row) => row.id);
 }
 
+export async function loadPaymentBeneficiaries(): Promise<PaymentBeneficiaryOption[]> {
+  const supabase = await createClient();
+  const pageSize = 1000;
+  const rows: PaymentBeneficiaryOption[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("beneficiaries")
+      .select("id, legal_name")
+      .order("legal_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    for (const row of page) {
+      rows.push({ id: row.id, name: row.legal_name?.trim() || "—" });
+    }
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 export async function loadPayments(raw: {
   q?: string;
+  beneficiary?: string;
   mode?: string;
   from?: string;
   to?: string;
 }): Promise<PaymentListData> {
   const search = normalizePaymentSearch(raw.q);
+  const beneficiary = isBeneficiaryId((raw.beneficiary ?? "").trim()) ? raw.beneficiary!.trim() : "all";
   const mode = normalizePaymentModeFilter(raw.mode);
-  const from = normalizePaymentDate(raw.from);
-  const to = normalizePaymentDate(raw.to);
+  const month = currentMonthRange();
+  const from = normalizePaymentDate(raw.from) || month.from;
+  const to = normalizePaymentDate(raw.to) || month.to;
   const supabase = await createClient();
 
   let query = supabase
@@ -109,6 +139,7 @@ export async function loadPayments(raw: {
     .order("created_at", { ascending: false })
     .limit(PAYMENT_LIST_LIMIT + 1);
 
+  if (beneficiary !== "all") query = query.eq("invoices.beneficiary_id", beneficiary);
   if (mode !== "all") query = query.eq("payment_mode", mode);
   if (from) query = query.gte("payment_date", from);
   if (to) query = query.lte("payment_date", to);
@@ -129,6 +160,7 @@ export async function loadPayments(raw: {
   return {
     payments: (truncated ? rows.slice(0, PAYMENT_LIST_LIMIT) : rows).map(mapPayment),
     search,
+    beneficiary,
     mode,
     from,
     to,

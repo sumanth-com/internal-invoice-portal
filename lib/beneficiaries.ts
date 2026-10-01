@@ -154,6 +154,19 @@ export async function loadBeneficiary(id: string): Promise<Beneficiary | null> {
   return data ? mapBeneficiary(data) : null;
 }
 
+export async function beneficiaryIdsOnInvoices(ids: string[]) {
+  const unique = [...new Set(ids.filter(isBeneficiaryId))];
+  if (unique.length === 0) return new Set<string>();
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("invoices").select("beneficiary_id").in("beneficiary_id", unique);
+  if (error) throw error;
+  return new Set(
+    (data ?? [])
+      .map((row) => row.beneficiary_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
+}
+
 export async function beneficiaryHasInvoices(id: string) {
   const supabase = await createClient();
   const { count, error } = await supabase

@@ -28,27 +28,32 @@ export function SettingsView({
           You can view these settings. Only an admin can change them.
         </p>
       )}
-      <CompanySettingsSection
-        company={profile}
-        canEdit={canEdit}
-        onSaved={(details) => setProfile((current) => ({ ...current, ...details, exists: true }))}
-      />
-      <CompanyLogoSection
-        exists={profile.exists}
-        canEdit={canEdit}
-        initialPreviewUrl={profile.logoPreviewUrl}
-      />
-      <GstDefaultsSection
-        defaults={{
-          defaultGstEnabled: profile.defaultGstEnabled,
-          defaultGstRate: profile.defaultGstRate,
-        }}
-        exists={profile.exists}
-        canEdit={canEdit}
-        onSaved={(defaults) => setProfile((current) => ({ ...current, ...defaults }))}
-      />
-      <BankAccountsSection banks={banks} canEdit={canEdit} />
-      <InvoiceNumberingSection sequences={sequences} canEdit={canEdit} />
+      <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(16rem,0.85fr)]">
+        <CompanySettingsSection
+          company={profile}
+          canEdit={canEdit}
+          onSaved={(details) => setProfile((current) => ({ ...current, ...details, exists: true }))}
+        />
+        <CompanyLogoSection />
+      </div>
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <BankAccountsSection banks={banks} canEdit={canEdit} />
+        <GstDefaultsSection
+          defaults={{
+            defaultGstEnabled: profile.defaultGstEnabled,
+            defaultGstRate: profile.defaultGstRate,
+            gstin: profile.gstin,
+            pan: profile.pan,
+          }}
+          currency={profile.defaultCurrency}
+          country={profile.country}
+          exists={profile.exists}
+          canEdit={canEdit}
+          onSaved={(defaults) => setProfile((current) => ({ ...current, ...defaults }))}
+          onCurrencySaved={(defaultCurrency) => setProfile((current) => ({ ...current, defaultCurrency }))}
+        />
+      </div>
+      <InvoiceNumberingSection sequences={sequences} />
     </div>
   );
 }

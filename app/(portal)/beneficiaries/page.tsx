@@ -2,7 +2,8 @@ import { BeneficiaryList } from "@/components/portal/beneficiary-list";
 import { AddBeneficiaryButton, AutoOpenModal } from "@/components/portal/modal-triggers";
 import { PageHeader, StatCardsSkeleton, TableSkeleton } from "@/components/portal/skeletons";
 import { beneficiaryNotice } from "@/lib/beneficiary";
-import { loadBeneficiaries } from "@/lib/beneficiaries";
+import { beneficiaryIdsOnInvoices, loadBeneficiaries } from "@/lib/beneficiaries";
+import { getPortalUser } from "@/lib/portal-user";
 import { Suspense } from "react";
 
 export const metadata = {
@@ -22,10 +23,10 @@ function first(value: string | string[] | undefined) {
 
 function BeneficiariesFallback() {
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <StatCardsSkeleton count={3} />
       <TableSkeleton label="Loading beneficiaries…" />
-    </>
+    </div>
   );
 }
 
@@ -34,11 +35,23 @@ async function BeneficiariesContent({ searchParams }: { searchParams: SearchPara
   const autoOpen = first(params.new) === "1";
 
   try {
-    const data = await loadBeneficiaries(first(params.q), first(params.status));
+    const [data, user] = await Promise.all([
+      loadBeneficiaries(first(params.q), first(params.status)),
+      getPortalUser(),
+    ]);
+    const usedOnInvoices =
+      user?.role === "admin" ? await beneficiaryIdsOnInvoices(data.beneficiaries.map((item) => item.id)) : new Set<string>();
+    const deletableIds =
+      user?.role === "admin" ? data.beneficiaries.filter((item) => !usedOnInvoices.has(item.id)).map((item) => item.id) : [];
     return (
       <>
         {autoOpen ? <AutoOpenModal kind="beneficiary" /> : null}
-        <BeneficiaryList data={data} notice={beneficiaryNotice(first(params.notice))} />
+        <BeneficiaryList
+          data={data}
+          notice={beneficiaryNotice(first(params.notice))}
+          deletableIds={deletableIds}
+          isAdmin={user?.role === "admin"}
+        />
       </>
     );
   } catch (error) {
@@ -56,12 +69,14 @@ async function BeneficiariesContent({ searchParams }: { searchParams: SearchPara
 
 export default function BeneficiariesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader
-        title="Beneficiaries"
-        description="Companies and people invoices are raised to."
-        actions={<AddBeneficiaryButton />}
-      />
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+      <div className="shrink-0">
+        <PageHeader
+          title="Beneficiaries"
+          description="Companies and people invoices are raised to."
+          actions={<AddBeneficiaryButton />}
+        />
+      </div>
       <Suspense fallback={<BeneficiariesFallback />}>
         <BeneficiariesContent searchParams={searchParams} />
       </Suspense>

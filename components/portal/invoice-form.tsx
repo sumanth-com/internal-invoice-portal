@@ -27,7 +27,9 @@ import {
   startTransition,
   useActionState,
   useEffect,
+  useId,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -73,6 +75,120 @@ function Field({
         <p id={`${id}-error`} className="text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+    </div>
+  );
+}
+
+function bankOptionLabel(account: BankAccountOption) {
+  return `${bankAccountLabel(account)}${account.isActive ? "" : " (inactive)"}`;
+}
+
+function BankAccountSuggest({
+  accounts,
+  defaultId,
+  invalid,
+}: {
+  accounts: BankAccountOption[];
+  defaultId: string;
+  invalid?: boolean;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const initial = accounts.find((account) => account.id === defaultId);
+  const [accountId, setAccountId] = useState(defaultId);
+  const [query, setQuery] = useState(initial ? bankOptionLabel(initial) : "");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const needle = query.trim().toLowerCase();
+  const matches = (
+    needle
+      ? accounts.filter((account) => bankOptionLabel(account).toLowerCase().includes(needle))
+      : accounts
+  ).slice(0, 8);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  function choose(account: BankAccountOption) {
+    setAccountId(account.id);
+    setQuery(bankOptionLabel(account));
+    setOpen(false);
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <input type="hidden" name="bank_account_id" value={accountId} />
+      <input
+        id="bank_account_id"
+        value={query}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open && matches.length > 0}
+        aria-controls={listId}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? "bank_account_id-error" : undefined}
+        placeholder="Search saved bank accounts"
+        autoComplete="off"
+        onChange={(event) => {
+          const next = event.target.value;
+          setQuery(next);
+          setOpen(true);
+          const exact = accounts.find((account) => bankOptionLabel(account) === next);
+          setAccountId(exact?.id ?? "");
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+            return;
+          }
+          if (!matches.length) return;
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setOpen(true);
+            setActive((current) => (current + 1) % matches.length);
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            setActive((current) => (current - 1 + matches.length) % matches.length);
+          } else if (event.key === "Enter" && open) {
+            event.preventDefault();
+            choose(matches[active] ?? matches[0]);
+          }
+        }}
+        className={selectClass}
+      />
+      {open && matches.length > 0 ? (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 text-sm shadow-md"
+        >
+          {matches.map((account, optionIndex) => (
+            <li key={account.id} role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={optionIndex === active}
+                className={cn(
+                  "flex w-full cursor-pointer px-3 py-2 text-left",
+                  optionIndex === active ? "bg-muted" : "hover:bg-muted/70",
+                )}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(account)}
+              >
+                {bankOptionLabel(account)}
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );
@@ -389,24 +505,15 @@ export function InvoiceForm({
           <Section title="Bank and payment">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field id="bank_account_id" label="Bank account" error={errors.bank_account_id}>
-                <select
-                  id="bank_account_id"
-                  name="bank_account_id"
-                  defaultValue={
+                <BankAccountSuggest
+                  accounts={bankAccounts}
+                  defaultId={
                     invoice
                       ? (invoice.bankAccountId ?? "")
                       : (bankAccounts.find((account) => account.isDefault)?.id ?? "")
                   }
-                  className={selectClass}
-                >
-                  <option value="">Select when issuing</option>
-                  {bankAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {bankAccountLabel(account)}
-                      {account.isActive ? "" : " (inactive)"}
-                    </option>
-                  ))}
-                </select>
+                  invalid={Boolean(errors.bank_account_id)}
+                />
               </Field>
               <Field id="payment_terms" label="Payment terms" error={errors.payment_terms}>
                 <Input

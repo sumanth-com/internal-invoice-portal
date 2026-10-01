@@ -13,7 +13,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function AuditSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <StatCardsSkeleton count={4} />
       <TableSkeleton rows={6} label="Loading activity…" />
     </div>
@@ -22,7 +22,7 @@ function AuditSkeleton() {
 
 function AuditFallback() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
       <div>
         <span className="block h-7 w-40 animate-pulse rounded bg-muted" />
         <span className="mt-3 block h-4 w-full max-w-md animate-pulse rounded bg-muted" />
@@ -39,11 +39,13 @@ async function AuditGate({ searchParams }: { searchParams: SearchParams }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader
-        title="Audit Log"
-        description="A history of invoice activity, including who did it and when."
-      />
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+      <div className="shrink-0">
+        <PageHeader
+          title="Audit Log"
+          description="A history of invoice activity, including who did it and when."
+        />
+      </div>
       <Suspense fallback={<AuditSkeleton />}>
         <AuditContent searchParams={searchParams} />
       </Suspense>
@@ -65,6 +67,7 @@ async function AuditContent({ searchParams }: { searchParams: SearchParams }) {
       user: read("user"),
       from: read("from"),
       to: read("to"),
+      group: read("group"),
       page: read("page"),
     });
     return <AuditLog data={data} />;

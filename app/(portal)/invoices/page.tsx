@@ -3,6 +3,7 @@ import { AutoOpenModal, CreateInvoiceButton } from "@/components/portal/modal-tr
 import { PageHeader, TableSkeleton } from "@/components/portal/skeletons";
 import { invoiceNotice } from "@/lib/invoice";
 import { loadInvoices } from "@/lib/invoices";
+import { getPortalUser } from "@/lib/portal-user";
 import { Suspense } from "react";
 
 export const metadata = {
@@ -20,17 +21,20 @@ async function InvoicesContent({ searchParams }: { searchParams: SearchParams })
   const autoOpen = read("new") === "1";
 
   try {
-    const data = await loadInvoices({
-      q: read("q"),
-      status: read("status"),
-      from: read("from"),
-      to: read("to"),
-      sort: read("sort"),
-    });
+    const [data, user] = await Promise.all([
+      loadInvoices({
+        q: read("q"),
+        status: read("status"),
+        from: read("from"),
+        to: read("to"),
+        sort: read("sort"),
+      }),
+      getPortalUser(),
+    ]);
     return (
       <>
         {autoOpen ? <AutoOpenModal kind="invoice" /> : null}
-        <InvoiceList data={data} notice={invoiceNotice(read("notice"))} />
+        <InvoiceList data={data} notice={invoiceNotice(read("notice"))} isAdmin={user?.role === "admin"} />
       </>
     );
   } catch (error) {
@@ -47,12 +51,14 @@ async function InvoicesContent({ searchParams }: { searchParams: SearchParams })
 
 export default function InvoicesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader
-        title="Invoices"
-        description="Draft, issued, paid, and cancelled invoices."
-        actions={<CreateInvoiceButton />}
-      />
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+      <div className="shrink-0">
+        <PageHeader
+          title="Invoices"
+          description="Draft, issued, paid, and cancelled invoices."
+          actions={<CreateInvoiceButton />}
+        />
+      </div>
       <Suspense fallback={<TableSkeleton rows={6} label="Loading invoices…" />}>
         <InvoicesContent searchParams={searchParams} />
       </Suspense>

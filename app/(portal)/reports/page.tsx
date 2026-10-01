@@ -1,6 +1,7 @@
 import { ReportsView } from "@/components/portal/reports-view";
-import { PageHeader, StatCardsSkeleton, TableSkeleton } from "@/components/portal/skeletons";
+import { TableSkeleton } from "@/components/portal/skeletons";
 import { loadReport } from "@/lib/reports-data";
+import { buildReport, filterReportInvoices, reportTypeFromParam } from "@/lib/reports";
 import { Suspense } from "react";
 
 export const metadata = {
@@ -11,14 +12,12 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function ReportsSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 5 }, (_, index) => (
-          <span key={index} className="h-8 w-28 animate-pulse rounded-md bg-muted" />
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div>
+        <span className="block h-7 w-32 animate-pulse rounded bg-muted" />
+        <span className="mt-3 block h-4 w-full max-w-md animate-pulse rounded bg-muted" />
       </div>
-      <StatCardsSkeleton count={5} />
-      <TableSkeleton rows={4} label="Loading reports…" />
+      <TableSkeleton rows={6} label="Loading reports…" />
     </div>
   );
 }
@@ -31,12 +30,24 @@ async function ReportsContent({ searchParams }: { searchParams: SearchParams }) 
   };
 
   try {
-    const { view } = await loadReport({
+    const loaded = await loadReport({
       range: read("range"),
       from: read("from"),
       to: read("to"),
     });
-    return <ReportsView data={view} />;
+    const type = reportTypeFromParam(read("type"));
+    const query = read("q")?.trim() ?? "";
+    if (loaded.view.error) {
+      return <ReportsView data={loaded.view} invoices={[]} type={type} query={query} />;
+    }
+    const invoices = filterReportInvoices(loaded.invoices, { type, query });
+    const view = buildReport(invoices, {
+      range: loaded.view.range,
+      from: loaded.view.from,
+      to: loaded.view.to,
+      activeBeneficiaries: loaded.view.beneficiaries.active,
+    });
+    return <ReportsView data={view} invoices={invoices} type={type} query={query} />;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Reports could not be loaded.";
     return (
@@ -51,8 +62,7 @@ async function ReportsContent({ searchParams }: { searchParams: SearchParams }) 
 
 export default function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader title="Reports" description="View invoice, payment, GST, and collection summaries." />
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
       <Suspense fallback={<ReportsSkeleton />}>
         <ReportsContent searchParams={searchParams} />
       </Suspense>

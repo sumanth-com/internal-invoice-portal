@@ -58,7 +58,6 @@ export type CompanyField = Exclude<
 
 export type CompanyWrite = {
   legal_name: string;
-  trade_name: string | null;
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
@@ -68,11 +67,6 @@ export type CompanyWrite = {
   email: string | null;
   phone: string | null;
   website: string | null;
-  gstin: string | null;
-  pan: string | null;
-  default_currency: string;
-  default_payment_terms: string | null;
-  invoice_notes: string | null;
 };
 
 export type CompanyFormState = {
@@ -84,12 +78,20 @@ export type CompanyFormState = {
 export type GstDefaults = {
   defaultGstEnabled: boolean;
   defaultGstRate: number;
+  gstin: string;
+  pan: string;
 };
 
 export type GstFormState = {
   error: string | null;
-  fieldErrors: Partial<Record<"default_gst_rate", string>>;
+  fieldErrors: Partial<Record<"default_gst_rate" | "gstin" | "pan", string>>;
   saved?: GstDefaults;
+};
+
+export type CurrencyFormState = {
+  error: string | null;
+  fieldErrors: Partial<Record<"default_currency", string>>;
+  saved?: string;
 };
 
 export type SettingsBankAccount = {
@@ -207,6 +209,7 @@ const RATE_PATTERN = /^\d+(\.\d{1,2})?$/;
 
 export const emptyCompanyFormState: CompanyFormState = { error: null, fieldErrors: {} };
 export const emptyGstFormState: GstFormState = { error: null, fieldErrors: {} };
+export const emptyCurrencyFormState: CurrencyFormState = { error: null, fieldErrors: {} };
 export const emptyBankFormState: BankFormState = { error: null, fieldErrors: {} };
 export const emptyBankMutationState: BankMutationState = { error: null };
 export const emptyNumberingFormState: NumberingFormState = { error: null, fieldErrors: {} };
@@ -404,7 +407,6 @@ export function parseCompanyForm(
 ): { ok: true; value: CompanyWrite } | { ok: false; fieldErrors: CompanyFormState["fieldErrors"] } {
   const errors: CompanyFormState["fieldErrors"] = {};
   const legalName = fieldText(formData, "legal_name");
-  const tradeName = fieldText(formData, "trade_name");
   const addressLine1 = fieldText(formData, "address_line1");
   const addressLine2 = fieldText(formData, "address_line2");
   const city = fieldText(formData, "city");
@@ -414,17 +416,11 @@ export function parseCompanyForm(
   const email = fieldText(formData, "email").toLowerCase();
   const phone = fieldText(formData, "phone");
   const website = fieldText(formData, "website");
-  const gstin = fieldText(formData, "gstin").toUpperCase();
-  const pan = fieldText(formData, "pan").toUpperCase();
-  const currency = fieldText(formData, "default_currency").toUpperCase() || "INR";
-  const paymentTerms = fieldText(formData, "default_payment_terms");
-  const notes = fieldText(formData, "invoice_notes");
 
   if (!legalName) errors.legal_name = "Enter the company name.";
   else if (!limit(legalName, 200, "legal_name", "Company name", errors)) {
     /* recorded */
   }
-  limit(tradeName, 200, "trade_name", "Trade name", errors);
   limit(addressLine1, 200, "address_line1", "Address line 1", errors);
   limit(addressLine2, 200, "address_line2", "Address line 2", errors);
   limit(city, 80, "city", "City", errors);
@@ -438,17 +434,6 @@ export function parseCompanyForm(
   }
   limit(phone, 30, "phone", "Phone", errors);
   limit(website, 200, "website", "Website", errors);
-  if (gstin && !GSTIN_PATTERN.test(gstin)) {
-    errors.gstin = "Enter a valid 15-character GSTIN, or leave it blank.";
-  }
-  if (pan && !PAN_PATTERN.test(pan)) {
-    errors.pan = "Enter a valid 10-character PAN, or leave it blank.";
-  }
-  if (!/^[A-Z]{3}$/.test(currency)) {
-    errors.default_currency = "Currency must be a 3-letter code, such as INR.";
-  }
-  limit(paymentTerms, 2000, "default_payment_terms", "Payment terms", errors);
-  limit(notes, 2000, "invoice_notes", "Invoice notes", errors);
 
   let websiteValue: string | null = null;
   if (website && !errors.website) {
@@ -471,7 +456,6 @@ export function parseCompanyForm(
     ok: true,
     value: {
       legal_name: legalName,
-      trade_name: blankToNull(tradeName),
       address_line1: blankToNull(addressLine1),
       address_line2: blankToNull(addressLine2),
       city: blankToNull(city),
@@ -481,37 +465,59 @@ export function parseCompanyForm(
       email: blankToNull(email),
       phone: blankToNull(phone),
       website: websiteValue,
-      gstin: blankToNull(gstin),
-      pan: blankToNull(pan),
-      default_currency: currency,
-      default_payment_terms: blankToNull(paymentTerms),
-      invoice_notes: blankToNull(notes),
     },
   };
 }
 
 export function parseGstForm(
   formData: FormData,
-): { ok: true; value: { default_gst_enabled: boolean; default_gst_rate: number } } | {
+): {
+  ok: true;
+  value: { default_gst_enabled: boolean; default_gst_rate: number; gstin: string | null; pan: string | null };
+} | {
   ok: false;
   fieldErrors: GstFormState["fieldErrors"];
 } {
+  const errors: GstFormState["fieldErrors"] = {};
   const enabled = formData.get("default_gst_enabled") === "on";
   const rateText = fieldText(formData, "default_gst_rate");
+  const gstin = fieldText(formData, "gstin").toUpperCase();
+  const pan = fieldText(formData, "pan").toUpperCase();
   if (!RATE_PATTERN.test(rateText)) {
+    errors.default_gst_rate = "Enter a GST rate from 0 to 100, with up to 2 decimal places.";
+  } else {
+    const rate = Number(rateText);
+    if (rate < 0 || rate > 100) errors.default_gst_rate = "GST rate must be between 0 and 100.";
+  }
+  if (gstin && !GSTIN_PATTERN.test(gstin)) {
+    errors.gstin = "Enter a valid 15-character GSTIN, or leave it blank.";
+  }
+  if (pan && !PAN_PATTERN.test(pan)) {
+    errors.pan = "Enter a valid 10-character PAN, or leave it blank.";
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, fieldErrors: errors };
+  return {
+    ok: true,
+    value: {
+      default_gst_enabled: enabled,
+      default_gst_rate: Number(rateText),
+      gstin: blankToNull(gstin),
+      pan: blankToNull(pan),
+    },
+  };
+}
+
+export function parseCurrencyForm(
+  formData: FormData,
+): { ok: true; value: string } | { ok: false; fieldErrors: CurrencyFormState["fieldErrors"] } {
+  const currency = fieldText(formData, "default_currency").toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
     return {
       ok: false,
-      fieldErrors: { default_gst_rate: "Enter a GST rate from 0 to 100, with up to 2 decimal places." },
+      fieldErrors: { default_currency: "Currency must be a 3-letter code, such as INR." },
     };
   }
-  const rate = Number(rateText);
-  if (rate < 0 || rate > 100) {
-    return {
-      ok: false,
-      fieldErrors: { default_gst_rate: "GST rate must be between 0 and 100." },
-    };
-  }
-  return { ok: true, value: { default_gst_enabled: enabled, default_gst_rate: rate } };
+  return { ok: true, value: currency };
 }
 
 export function parseBankForm(

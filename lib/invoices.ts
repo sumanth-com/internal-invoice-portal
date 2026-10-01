@@ -2,6 +2,7 @@ import {
   formatBeneficiaryBillTo,
   formatCompanyBillFrom,
   INVOICE_LIST_LIMIT,
+  currentMonthRange,
   isInvoiceId,
   isInvoiceStatus,
   normalizeInvoiceDateFilter,
@@ -132,8 +133,9 @@ export async function loadInvoices(raw: {
 }): Promise<InvoiceListData> {
   const search = normalizeInvoiceSearch(raw.q);
   const status = normalizeInvoiceStatusFilter(raw.status);
-  const from = normalizeInvoiceDateFilter(raw.from);
-  const to = normalizeInvoiceDateFilter(raw.to);
+  const month = currentMonthRange();
+  const from = normalizeInvoiceDateFilter(raw.from) || month.from;
+  const to = normalizeInvoiceDateFilter(raw.to) || month.to;
   const sort: InvoiceSort = normalizeInvoiceSort(raw.sort);
   const supabase = await createClient();
 

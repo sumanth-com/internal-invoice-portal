@@ -16,6 +16,7 @@ export type PaymentRecord = {
   id: string;
   invoiceId: string;
   invoiceNumber: string;
+  beneficiaryId: string;
   beneficiaryName: string;
   paymentDate: string;
   paymentMode: PaymentMode;
@@ -36,9 +37,15 @@ export type PayableInvoice = {
   outstanding: number;
 };
 
+export type PaymentBeneficiaryOption = {
+  id: string;
+  name: string;
+};
+
 export type PaymentListData = {
   payments: PaymentRecord[];
   search: string;
+  beneficiary: string;
   mode: PaymentMode | "all";
   from: string;
   to: string;
@@ -59,6 +66,11 @@ export type PaymentFormState = {
   error: string | null;
   fieldErrors: Partial<Record<PaymentField, string>>;
   saved?: RecordedPayment;
+};
+
+export type PaymentDeleteState = {
+  error: string | null;
+  deleted?: RecordedPayment;
 };
 
 export const emptyPaymentFormState: PaymentFormState = {
@@ -105,6 +117,24 @@ export function normalizePaymentModeFilter(value: string | undefined): PaymentMo
 export function normalizePaymentDate(value: string | undefined) {
   const text = (value ?? "").trim();
   return DATE_PATTERN.test(text) ? text : "";
+}
+
+export function paymentListHref(options: {
+  search?: string;
+  beneficiary?: string;
+  mode?: PaymentMode | "all";
+  from?: string;
+  to?: string;
+}) {
+  const params = new URLSearchParams();
+  const search = options.search?.trim();
+  if (search) params.set("q", search);
+  if (options.beneficiary && options.beneficiary !== "all") params.set("beneficiary", options.beneficiary);
+  if (options.mode && options.mode !== "all") params.set("mode", options.mode);
+  if (options.from) params.set("from", options.from);
+  if (options.to) params.set("to", options.to);
+  const query = params.toString();
+  return query ? `/payments?${query}` : "/payments";
 }
 
 export function paymentBalance(total: number, amountPaid: number, status: string) {

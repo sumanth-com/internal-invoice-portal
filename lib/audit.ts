@@ -1,4 +1,4 @@
-import { formatMoney, statusLabel, type InvoiceStatus } from "@/lib/invoice";
+import { datesAreCurrentMonth, formatMoney, statusLabel, type InvoiceStatus } from "@/lib/invoice";
 import { isPaymentMode, paymentModeLabel } from "@/lib/payment";
 
 export const AUDIT_PAGE_SIZE = 40;
@@ -8,6 +8,8 @@ export const AUDIT_ACTIONS = [
   "updated",
   "issued",
   "payment_recorded",
+  "payment_updated",
+  "payment_deleted",
   "paid",
   "cancelled",
   "duplicated",
@@ -18,13 +20,26 @@ export const AUDIT_ACTIONS = [
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export const PAYMENT_AUDIT_ACTIONS: readonly AuditAction[] = ["payment_recorded", "paid"];
+export const PAYMENT_AUDIT_ACTIONS: readonly AuditAction[] = [
+  "payment_recorded",
+  "payment_updated",
+  "payment_deleted",
+  "paid",
+];
+
+export const INVOICE_AUDIT_ACTIONS: readonly AuditAction[] = AUDIT_ACTIONS.filter(
+  (action) => !PAYMENT_AUDIT_ACTIONS.includes(action),
+);
+
+export type AuditGroup = "all" | "invoice" | "payment";
 
 const ACTION_LABELS: Record<AuditAction, string> = {
   created: "Invoice Created",
   updated: "Invoice Updated",
   issued: "Invoice Issued",
   payment_recorded: "Payment Recorded",
+  payment_updated: "Payment Updated",
+  payment_deleted: "Payment Deleted",
   paid: "Invoice Paid",
   cancelled: "Invoice Cancelled",
   duplicated: "Invoice Duplicated",
@@ -76,6 +91,7 @@ export type AuditLogPage = {
   pageCount: number;
   search: string;
   action: AuditAction | "all";
+  group: AuditGroup;
   user: string;
   from: string;
   to: string;
@@ -91,7 +107,7 @@ export function isAuditAction(value: string): value is AuditAction {
 }
 
 export function isPaymentAuditAction(action: AuditAction) {
-  return action === "payment_recorded" || action === "paid";
+  return (PAYMENT_AUDIT_ACTIONS as readonly AuditAction[]).includes(action);
 }
 
 export function normalizeAuditSearch(value: string | undefined) {
@@ -104,6 +120,11 @@ export function normalizeAuditSearch(value: string | undefined) {
 
 export function normalizeAuditAction(value: string | undefined): AuditAction | "all" {
   if (value && isAuditAction(value)) return value;
+  return "all";
+}
+
+export function normalizeAuditGroup(value: string | undefined): AuditGroup {
+  if (value === "invoice" || value === "payment") return value;
   return "all";
 }
 
@@ -147,12 +168,13 @@ export function formatAuditTimestamp(value: string) {
 }
 
 export function auditLogHref(
-  filters: Pick<AuditLogPage, "search" | "action" | "user" | "from" | "to">,
+  filters: Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">,
   page = 1,
 ) {
   const params = new URLSearchParams();
   if (filters.search) params.set("q", filters.search);
   if (filters.action !== "all") params.set("action", filters.action);
+  if (filters.group !== "all") params.set("group", filters.group);
   if (filters.user !== "all") params.set("user", filters.user);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
@@ -162,14 +184,14 @@ export function auditLogHref(
 }
 
 export function auditFiltersActive(
-  filters: Pick<AuditLogPage, "search" | "action" | "user" | "from" | "to">,
+  filters: Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">,
 ) {
   return (
     filters.search.length > 0 ||
     filters.action !== "all" ||
+    filters.group !== "all" ||
     filters.user !== "all" ||
-    filters.from.length > 0 ||
-    filters.to.length > 0
+    !datesAreCurrentMonth(filters.from, filters.to)
   );
 }
 
@@ -242,7 +264,7 @@ export function describeAuditMetadata(
   };
 
   const parts: string[] = [];
-  if (action === "payment_recorded" || action === "paid") {
+  if (isPaymentAuditAction(action)) {
     if (amount) parts.push(amount);
     if (paymentMode) parts.push(paymentMode);
     if (reference) parts.push(reference);

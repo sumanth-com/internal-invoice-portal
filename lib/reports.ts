@@ -181,6 +181,122 @@ export function resolveReportRange(
   return { range, from, to, error: null };
 }
 
+export const REPORT_TYPES = ["all", "invoices", "gst", "payments", "outstanding", "beneficiaries"] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
+
+export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  all: "All reports",
+  invoices: "Invoices",
+  gst: "GST",
+  payments: "Payments / Collections",
+  outstanding: "Outstanding",
+  beneficiaries: "Beneficiaries",
+};
+
+export type ReportCard = "invoices" | "value" | "gst" | "paid" | "outstanding";
+
+export function isReportType(value: string): value is ReportType {
+  return (REPORT_TYPES as readonly string[]).includes(value);
+}
+
+export function reportTypeFromParam(value: string | undefined): ReportType {
+  if (value === "collections") return "payments";
+  return value && isReportType(value) ? value : "all";
+}
+
+export function reportCardFromParams(type: ReportType, card: string | undefined): ReportCard | null {
+  if (type === "invoices" && card === "value") return "value";
+  if (type === "invoices") return "invoices";
+  if (type === "gst") return "gst";
+  if (type === "payments") return "paid";
+  if (type === "outstanding") return "outstanding";
+  return null;
+}
+
+export function filterReportInvoices(
+  invoices: ReportInvoice[],
+  options: { type: ReportType; query: string },
+) {
+  const query = options.query.trim().toLowerCase();
+  return invoices.filter((invoice) => {
+    if (query) {
+      const haystack = [
+        invoice.number,
+        invoice.beneficiaryName,
+        statusLabel(invoice.status),
+        ...invoice.payments.map((payment) => paymentModeLabel(payment.mode)),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    if (options.type === "outstanding") return invoice.outstanding > 0;
+    if (options.type === "payments") return invoice.amountPaid > 0 || invoice.payments.length > 0;
+    return true;
+  });
+}
+
+export function reportBeneficiaryRows(invoices: ReportInvoice[]) {
+  const currency = invoices.every((invoice) => invoice.currency === invoices[0]?.currency)
+    ? (invoices[0]?.currency ?? "INR")
+    : "INR";
+  const rows = new Map<string, { id: string; name: string; count: number; value: number }>();
+  for (const invoice of invoices) {
+    const current = rows.get(invoice.beneficiaryId) ?? {
+      id: invoice.beneficiaryId,
+      name: invoice.beneficiaryName,
+      count: 0,
+      value: 0,
+    };
+    current.count += 1;
+    current.value += invoice.total;
+    rows.set(invoice.beneficiaryId, current);
+  }
+  return [...rows.values()]
+    .sort((left, right) => right.value - left.value || left.name.localeCompare(right.name))
+    .map((row) => ({
+      ...row,
+      valueLabel: formatMoney(roundMoney(row.value), currency),
+    }));
+}
+
+export function reportPageHref(options: {
+  type?: ReportType;
+  card?: ReportCard | null;
+  from?: string;
+  to?: string;
+  query?: string;
+}) {
+  const params = new URLSearchParams();
+  const type = options.type ?? "all";
+  if (type !== "all") params.set("type", type);
+  if (options.card === "value") params.set("card", "value");
+  if (options.from) params.set("from", options.from);
+  if (options.to) params.set("to", options.to);
+  if (options.from || options.to) params.set("range", "custom");
+  const query = options.query?.trim();
+  if (query) params.set("q", query);
+  const search = params.toString();
+  return search ? `/reports?${search}` : "/reports";
+}
+
+export function reportExportHref(
+  format: "xlsx" | "pdf",
+  options: { from: string; to: string; type: ReportType; query: string },
+) {
+  const params = new URLSearchParams({
+    format,
+    range: "custom",
+    from: options.from,
+    to: options.to,
+    type: options.type,
+  });
+  const query = options.query.trim();
+  if (query) params.set("q", query);
+  return `/reports/export?${params.toString()}`;
+}
+
 export function reportHref(range: ReportRange, from = "", to = "") {
   const params = new URLSearchParams({ range });
   if (range === "custom") {

@@ -1,5 +1,6 @@
 "use client";
 
+import { IconAction } from "@/components/portal/icon-action";
 import { Modal, ModalBody, ModalFooter } from "@/components/portal/modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,23 +11,83 @@ import {
   auditFiltersActive,
   auditLogHref,
   formatAuditTimestamp,
+  isPaymentAuditAction,
+  type AuditAction,
   type AuditEntry,
+  type AuditGroup,
   type AuditLogPage,
 } from "@/lib/audit";
-import { formatInvoiceDate } from "@/lib/invoice";
-import { Search } from "lucide-react";
+import { currentMonthRange, datesAreCurrentMonth, formatInvoiceDate, invoiceToday } from "@/lib/invoice";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Eye, Search } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useCallback, useEffect, useState, type ReactNode } from "react";
 
-const selectClass =
-  "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+const fieldClass =
+  "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
 
-function StatCard({ label, value }: { label: string; value: number }) {
+type AuditFilters = Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">;
+type EventCard = "total" | "today" | "invoice" | "payment";
+
+function selectedEventCard(filters: AuditFilters): EventCard | null {
+  if (filters.group === "invoice") return "invoice";
+  if (filters.group === "payment") return "payment";
+  const today = invoiceToday();
+  if (filters.from === today && filters.to === today) return "today";
+  if (filters.action === "all" && datesAreCurrentMonth(filters.from, filters.to)) return "total";
+  return null;
+}
+
+function StatCard({
+  label,
+  value,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  value: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className="rounded-xl border bg-card p-4 text-left shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
-    </section>
+    </button>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative shrink-0", className)}>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(fieldClass, "pl-3 pr-9")}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
   );
 }
 
@@ -118,146 +179,253 @@ function AuditDetailModal({
 }
 
 export function AuditLog({ data }: { data: AuditLogPage }) {
+  const router = useRouter();
+  const [source, setSource] = useState(data);
+  const [search, setSearch] = useState(data.search);
+  const [action, setAction] = useState(data.action);
+  const [group, setGroup] = useState<AuditGroup>(data.group);
+  const [user, setUser] = useState(data.user);
+  const [from, setFrom] = useState(data.from);
+  const [to, setTo] = useState(data.to);
   const [selected, setSelected] = useState<AuditEntry | null>(null);
-  const filtering = auditFiltersActive(data);
-  const filters = {
-    search: data.search,
-    action: data.action,
-    user: data.user,
-    from: data.from,
-    to: data.to,
-  };
+
+  if (source !== data) {
+    setSource(data);
+    setSearch(data.search);
+    setAction(data.action);
+    setGroup(data.group);
+    setUser(data.user);
+    setFrom(data.from);
+    setTo(data.to);
+  }
+
+  const filters: AuditFilters = { search, action, group, user, from, to };
+  const filtering = auditFiltersActive(filters);
+  const activeCard = selectedEventCard(filters);
+
+  const pushFilters = useCallback(
+    (next?: Partial<AuditFilters>) => {
+      const href = auditLogHref({
+        search: next?.search ?? search,
+        action: next?.action ?? action,
+        group: next?.group ?? group,
+        user: next?.user ?? user,
+        from: next?.from ?? from,
+        to: next?.to ?? to,
+      });
+      startTransition(() => router.push(href));
+    },
+    [search, action, group, user, from, to, router],
+  );
+
+  useEffect(() => {
+    const query = search.trim();
+    if (query === data.search) return;
+    const timer = window.setTimeout(() => pushFilters({ search: query }), 300);
+    return () => window.clearTimeout(timer);
+  }, [search, data.search, pushFilters]);
+
+  function applyAction(value: string) {
+    const nextAction: AuditAction | "all" =
+      value !== "all" && AUDIT_ACTIONS.includes(value as AuditAction) ? (value as AuditAction) : "all";
+    let nextGroup = group;
+    if (nextAction !== "all") {
+      const payment = isPaymentAuditAction(nextAction);
+      if ((group === "payment" && !payment) || (group === "invoice" && payment)) nextGroup = "all";
+    }
+    setAction(nextAction);
+    setGroup(nextGroup);
+    pushFilters({ action: nextAction, group: nextGroup });
+  }
+
+  function selectCard(card: EventCard) {
+    if (card === "total") {
+      const month = currentMonthRange();
+      setAction("all");
+      setGroup("all");
+      setFrom(month.from);
+      setTo(month.to);
+      pushFilters({ action: "all", group: "all", from: month.from, to: month.to });
+      return;
+    }
+    if (card === "today") {
+      const today = invoiceToday();
+      setGroup("all");
+      setFrom(today);
+      setTo(today);
+      pushFilters({ group: "all", from: today, to: today });
+      return;
+    }
+    if (card === "invoice") {
+      const nextAction = action !== "all" && isPaymentAuditAction(action) ? "all" : action;
+      setAction(nextAction);
+      setGroup("invoice");
+      pushFilters({ action: nextAction, group: "invoice" });
+      return;
+    }
+    const nextAction = action !== "all" && isPaymentAuditAction(action) ? action : "all";
+    setAction(nextAction);
+    setGroup("payment");
+    pushFilters({ action: nextAction, group: "payment" });
+  }
+
+  function showAllActivity() {
+    const month = currentMonthRange();
+    setSearch("");
+    setAction("all");
+    setGroup("all");
+    setUser("all");
+    setFrom(month.from);
+    setTo(month.to);
+    startTransition(() => router.push("/audit"));
+  }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Events" value={data.total} />
-        <StatCard label="Today" value={data.today} />
-        <StatCard label="Invoice Events" value={data.invoiceEvents} />
-        <StatCard label="Payment Events" value={data.paymentEvents} />
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Total Events"
+          value={data.total}
+          selected={activeCard === "total"}
+          onSelect={() => selectCard("total")}
+        />
+        <StatCard
+          label="Today"
+          value={data.today}
+          selected={activeCard === "today"}
+          onSelect={() => selectCard("today")}
+        />
+        <StatCard
+          label="Invoice Events"
+          value={data.invoiceEvents}
+          selected={activeCard === "invoice"}
+          onSelect={() => selectCard("invoice")}
+        />
+        <StatCard
+          label="Payment Events"
+          value={data.paymentEvents}
+          selected={activeCard === "payment"}
+          onSelect={() => selectCard("payment")}
+        />
       </div>
 
-      <section className="min-w-0 rounded-xl border bg-card shadow-sm">
-        <div className="flex flex-col gap-4 border-b p-4">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="flex shrink-0 flex-col gap-3 border-b p-4">
           <div>
             <h2 className="text-base font-semibold">{filtering ? "Matching activity" : "All activity"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filtering
-                ? "Activity matching your search and filters."
-                : "Newest invoice activity first."}
+              {filtering ? "Activity matching your search and filters." : "Newest invoice activity first."}
             </p>
           </div>
-          <form action="/audit" className="flex min-w-0 flex-col gap-2">
-            <div className="relative min-w-0">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <form
+            className="flex items-center gap-2 overflow-x-auto"
+            onSubmit={(event) => {
+              event.preventDefault();
+              pushFilters({ search: search.trim() });
+            }}
+          >
+            <div className="relative min-w-56 flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                name="q"
-                defaultValue={data.search}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Invoice, name, or email"
                 aria-label="Search activity"
-                className="pl-8"
+                className="h-9 py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
               />
             </div>
-            <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <select name="action" defaultValue={data.action} aria-label="Action" className={selectClass}>
-                <option value="all">All actions</option>
-                {AUDIT_ACTIONS.map((action) => (
-                  <option key={action} value={action}>
-                    {auditActionLabel(action)}
-                  </option>
-                ))}
-              </select>
-              <select name="user" defaultValue={data.user} aria-label="User" className={selectClass}>
-                <option value="all">All users</option>
-                {data.users.map((actor) => (
-                  <option key={actor.id} value={actor.id}>
-                    {actor.name}
-                  </option>
-                ))}
-              </select>
-              <Input name="from" type="date" defaultValue={data.from} aria-label="From date" className="min-w-0" />
-              <Input name="to" type="date" defaultValue={data.to} aria-label="To date" className="min-w-0" />
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" variant="secondary">
-                Search
-              </Button>
-              {filtering ? (
-                <Button asChild variant="outline">
-                  <Link href="/audit">Clear</Link>
-                </Button>
-              ) : null}
-            </div>
+            <FilterSelect label="Action" value={action} onChange={applyAction} className="w-44">
+              <option value="all">All actions</option>
+              {AUDIT_ACTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {auditActionLabel(item)}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label="User"
+              value={user}
+              onChange={(value) => {
+                setUser(value);
+                pushFilters({ user: value });
+              }}
+              className="w-44"
+            >
+              <option value="all">All users</option>
+              {data.users.map((actor) => (
+                <option key={actor.id} value={actor.id}>
+                  {actor.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <Input
+              type="date"
+              value={from}
+              aria-label="From date"
+              onChange={(event) => {
+                setFrom(event.target.value);
+                pushFilters({ from: event.target.value });
+              }}
+              className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
+            />
+            <Input
+              type="date"
+              value={to}
+              aria-label="To date"
+              onChange={(event) => {
+                setTo(event.target.value);
+                pushFilters({ to: event.target.value });
+              }}
+              className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
+            />
           </form>
         </div>
 
         {data.entries.length === 0 ? (
-          <div className="px-4 py-10">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-16 text-center">
             <p className="text-sm text-muted-foreground">
-              {filtering ? "No activity matches this search." : "No activity recorded yet."}
+              {filtering
+                ? "No activity matches these filters."
+                : "No activity has been recorded yet."}
             </p>
             {filtering ? (
-              <Link href="/audit" className="mt-2 inline-block text-sm underline">
-                Clear search
-              </Link>
+              <Button type="button" variant="outline" className="mt-4" onClick={showAllActivity}>
+                Show all activity
+              </Button>
             ) : null}
           </div>
         ) : (
           <>
-            <ul className="divide-y lg:hidden">
-              {data.entries.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelected(entry)}
-                    className="w-full p-4 text-left hover:bg-accent/40"
-                  >
-                    <ActionBadge action={entry.action} />
-                    <p className="mt-2 text-sm font-medium">{entry.invoiceNumber}</p>
-                    <p className="mt-1 text-sm">{entry.actorName}</p>
-                    {entry.actorEmail ? (
-                      <p className="mt-1 break-all text-xs text-muted-foreground">{entry.actorEmail}</p>
-                    ) : null}
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {formatAuditTimestamp(entry.createdAt)}
-                    </p>
-                    {entry.summary !== "—" ? (
-                      <p className="mt-2 break-words text-sm text-muted-foreground">{entry.summary}</p>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full text-sm">
-                <thead className="border-b text-left text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Date & time</th>
-                    <th className="px-4 py-3 font-medium">User</th>
-                    <th className="px-4 py-3 font-medium">Action</th>
-                    <th className="px-4 py-3 font-medium">Invoice</th>
-                    <th className="px-4 py-3 font-medium">Details</th>
-                    <th className="px-4 py-3 font-medium">
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-card text-left text-muted-foreground">
+                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Date & time</th>
+                    <th className="border-b bg-card px-4 py-3 font-medium">User</th>
+                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Action</th>
+                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Invoice</th>
+                    <th className="border-b bg-card px-4 py-3 font-medium">Details</th>
+                    <th className="border-b bg-card px-4 py-3 font-medium">
                       <span className="sr-only">View</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.entries.map((entry) => (
-                    <tr key={entry.id} className="border-b last:border-0">
-                      <td className="px-4 py-3 text-muted-foreground">
+                    <tr key={entry.id}>
+                      <td className="border-b px-4 py-3 whitespace-nowrap text-muted-foreground">
                         {formatAuditTimestamp(entry.createdAt)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="border-b px-4 py-3 align-top">
                         <p className="font-medium">{entry.actorName}</p>
                         {entry.actorEmail && entry.actorEmail !== entry.actorName ? (
                           <p className="mt-1 break-all text-xs text-muted-foreground">{entry.actorEmail}</p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="border-b px-4 py-3 whitespace-nowrap">
                         <ActionBadge action={entry.action} />
                       </td>
-                      <td className="px-4 py-3 font-medium">
+                      <td className="border-b px-4 py-3 font-medium whitespace-nowrap">
                         <Link
                           href={`/invoices/${entry.invoiceId}`}
                           className="underline-offset-4 hover:underline"
@@ -265,20 +433,20 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
                           {entry.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="max-w-xs break-words px-4 py-3 text-muted-foreground">
+                      <td className="max-w-xs border-b px-4 py-3 break-words text-muted-foreground">
                         {entry.summary}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(entry)}>
-                          View
-                        </Button>
+                      <td className="border-b px-4 py-3 text-right whitespace-nowrap">
+                        <IconAction label="View" onClick={() => setSelected(entry)}>
+                          <Eye />
+                        </IconAction>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
                 {data.filtered === 1 ? "1 event." : `${data.filtered} events.`}
               </p>
@@ -289,12 +457,12 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
                   </p>
                   {data.page > 1 ? (
                     <Button asChild variant="outline" size="sm">
-                      <Link href={auditLogHref(filters, data.page - 1)}>Previous</Link>
+                      <Link href={auditLogHref(data, data.page - 1)}>Previous</Link>
                     </Button>
                   ) : null}
                   {data.page < data.pageCount ? (
                     <Button asChild variant="outline" size="sm">
-                      <Link href={auditLogHref(filters, data.page + 1)}>Next</Link>
+                      <Link href={auditLogHref(data, data.page + 1)}>Next</Link>
                     </Button>
                   ) : null}
                 </div>

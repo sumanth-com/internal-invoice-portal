@@ -15,14 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { invalidateInvoiceFormOptions } from "@/lib/invoice-options-store";
+import { cn } from "@/lib/utils";
 import {
   emptyBankFormState,
   emptyBankMutationState,
   sortBankAccounts,
   type SettingsBankAccount,
 } from "@/lib/settings";
-import { Loader2 } from "lucide-react";
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { Loader2, Plus } from "lucide-react";
+import { startTransition, useActionState, useCallback, useEffect, useRef, useState } from "react";
 
 function BankForm({
   account,
@@ -187,44 +188,56 @@ function AccountCard({
   }, [deleteState, onChanged]);
 
   return (
-    <article className="rounded-lg border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <article className="rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">{account.accountHolderName}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{account.bankName}</p>
+          <h3 className="truncate text-sm font-semibold">{account.accountHolderName}</h3>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">{account.bankName}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {account.isDefault ? <Badge>Default</Badge> : null}
-          {account.isActive ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Inactive</Badge>}
+        <div className="flex shrink-0 gap-1.5">
+          {account.isDefault ? (
+            <Badge variant="outline" className="shadow-none hover:bg-transparent">
+              Default
+            </Badge>
+          ) : null}
+          {account.isActive ? (
+            <Badge variant="secondary" className="shadow-none">
+              Active
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="shadow-none hover:bg-transparent">
+              Inactive
+            </Badge>
+          )}
         </div>
       </div>
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs text-muted-foreground">Account number</dt>
-          <dd className="mt-1 break-all font-mono">{account.accountNumber}</dd>
+          <dd className="mt-0.5 break-all font-mono">{account.accountNumber}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">IFSC</dt>
-          <dd className="mt-1">{account.ifscCode || "—"}</dd>
+          <dd className="mt-0.5">{account.ifscCode || "—"}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">SWIFT</dt>
-          <dd className="mt-1">{account.swiftCode || "—"}</dd>
+          <dd className="mt-0.5">{account.swiftCode || "—"}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Branch</dt>
-          <dd className="mt-1">{account.branch || "—"}</dd>
+          <dd className="mt-0.5">{account.branch || "—"}</dd>
         </div>
       </dl>
       {account.invoiceCount > 0 ? (
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           Used on {account.invoiceCount} invoice{account.invoiceCount === 1 ? "" : "s"}. It can be deactivated, not deleted.
         </p>
       ) : null}
       {activeState.error ? <div className="mt-3"><SettingsNotice tone="error">{activeState.error}</SettingsNotice></div> : null}
       {deleteState.error ? <div className="mt-3"><SettingsNotice tone="error">{deleteState.error}</SettingsNotice></div> : null}
       {canEdit ? (
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2">
           {confirm === "delete" ? (
             <form
               onSubmit={(event) => {
@@ -322,6 +335,18 @@ export function BankAccountsSection({
 }) {
   const [accounts, setAccounts] = useState(banks);
   const [editor, setEditor] = useState<string | "new" | null>(null);
+  const [index, setIndex] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const scrollTarget = useRef<number | null>(null);
+  const slides = editor === "new" ? accounts.length + 1 : accounts.length;
+
+  const scrollToIndex = useCallback((next: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const clamped = Math.max(0, Math.min(next, Math.max(slides - 1, 0)));
+    track.scrollTo({ left: clamped * track.clientWidth, behavior: "smooth" });
+    setIndex(clamped);
+  }, [slides]);
 
   function saveAccount(saved: SettingsBankAccount, clearedDefaultId: string | null) {
     setAccounts((current) => {
@@ -331,49 +356,115 @@ export function BankAccountsSection({
             account.id === saved.id ? { ...saved, invoiceCount: account.invoiceCount } : account,
           )
         : [...current, saved];
-      return sortBankAccounts(
+      const sorted = sortBankAccounts(
         next.map((account) =>
           account.id === clearedDefaultId ? { ...account, isDefault: false } : account,
         ),
       );
+      scrollTarget.current = Math.max(
+        0,
+        sorted.findIndex((account) => account.id === saved.id),
+      );
+      return sorted;
     });
     setEditor(null);
   }
 
+  useEffect(() => {
+    if (scrollTarget.current == null || editor !== null) return;
+    scrollToIndex(scrollTarget.current);
+    scrollTarget.current = null;
+  }, [accounts, editor, scrollToIndex]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const element = track;
+    function onWheel(event: WheelEvent) {
+      if (element.scrollWidth <= element.clientWidth + 1) return;
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      element.scrollBy({ left: event.deltaY });
+    }
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [slides]);
+
+  useEffect(() => {
+    if (editor === "new") scrollToIndex(accounts.length);
+  }, [accounts.length, editor, scrollToIndex]);
+
   return (
     <SettingsSection
       title="Bank accounts"
-      description="Receiving accounts that can be printed on an invoice. New invoices select the active default account."
-    >
-      <div className="grid gap-4">
-        {accounts.length === 0 && editor !== "new" ? (
-          <p className="text-sm text-muted-foreground">No bank accounts yet.</p>
-        ) : null}
-        {accounts.map((account) =>
-          editor === account.id ? (
-            <BankForm
-              key={account.id}
-              account={account}
-              onSaved={saveAccount}
-              onCancel={() => setEditor(null)}
-            />
-          ) : (
-            <AccountCard
-              key={account.id}
-              account={account}
-              canEdit={canEdit}
-              onEdit={() => setEditor(account.id)}
-              onChanged={setAccounts}
-            />
-          ),
-        )}
-        {canEdit && editor === "new" ? (
-          <BankForm key="new" account={null} onSaved={saveAccount} onCancel={() => setEditor(null)} />
-        ) : null}
-        {canEdit && editor === null ? (
-          <Button type="button" onClick={() => setEditor("new")} className="w-full sm:w-auto">
-            Add bank account
+      description="Receiving accounts printed on an invoice. Saved accounts are offered wherever a bank account is selected."
+      meta={
+        canEdit ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-8 cursor-pointer"
+            aria-label="Add bank account"
+            onClick={() => setEditor("new")}
+          >
+            <Plus />
           </Button>
+        ) : null
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
+        {slides === 0 ? (
+          <p className="text-sm text-muted-foreground">No bank accounts yet.</p>
+        ) : (
+          <div
+            ref={trackRef}
+            onScroll={(event) => {
+              const track = event.currentTarget;
+              if (track.clientWidth === 0) return;
+              setIndex(Math.round(track.scrollLeft / track.clientWidth));
+            }}
+            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {accounts.map((account) => (
+              <div key={account.id} className="w-full shrink-0 snap-start">
+                {editor === account.id ? (
+                  <BankForm account={account} onSaved={saveAccount} onCancel={() => setEditor(null)} />
+                ) : (
+                  <AccountCard
+                    account={account}
+                    canEdit={canEdit}
+                    onEdit={() => setEditor(account.id)}
+                    onChanged={setAccounts}
+                  />
+                )}
+              </div>
+            ))}
+            {editor === "new" ? (
+              <div className="w-full shrink-0 snap-start">
+                <BankForm account={null} onSaved={saveAccount} onCancel={() => setEditor(null)} />
+              </div>
+            ) : null}
+          </div>
+        )}
+        {slides > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {Array.from({ length: slides }, (_, pill) => (
+              <button
+                key={pill}
+                type="button"
+                aria-label={`Bank account ${pill + 1}`}
+                aria-current={pill === index}
+                onClick={() => scrollToIndex(pill)}
+                className={cn(
+                  "h-7 min-w-7 cursor-pointer rounded-full px-2 text-xs font-medium tabular-nums",
+                  pill === index ? "bg-foreground text-background" : "border bg-background text-foreground",
+                )}
+              >
+                {pill + 1}
+              </button>
+            ))}
+          </div>
         ) : null}
       </div>
     </SettingsSection>

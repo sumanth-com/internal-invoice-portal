@@ -188,6 +188,24 @@ export function normalizeInvoiceDateFilter(value: string | undefined) {
   return DATE_PATTERN.test(text) ? text : "";
 }
 
+export function invoiceListHref(options: {
+  search?: string;
+  status?: InvoiceStatus | "all";
+  from?: string;
+  to?: string;
+  sort?: InvoiceSort;
+}) {
+  const params = new URLSearchParams();
+  const search = options.search?.trim();
+  if (search) params.set("q", search);
+  if (options.status && options.status !== "all") params.set("status", options.status);
+  if (options.from) params.set("from", options.from);
+  if (options.to) params.set("to", options.to);
+  if (options.sort && options.sort !== "date_desc") params.set("sort", options.sort);
+  const query = params.toString();
+  return query ? `/invoices?${query}` : "/invoices";
+}
+
 export function invoiceNotice(value: string | undefined) {
   if (
     value === "saved" ||
@@ -223,6 +241,16 @@ export function periodDateBounds(period: string) {
     start: `${yyyy}-${mm}-01`,
     end: `${yyyy}-${mm}-${String(last).padStart(2, "0")}`,
   };
+}
+
+export function currentMonthRange(today = invoiceToday()) {
+  const bounds = periodDateBounds(today.slice(0, 4) + today.slice(5, 7));
+  return { from: bounds.start, to: bounds.end };
+}
+
+export function datesAreCurrentMonth(from: string, to: string, today = invoiceToday()) {
+  const month = currentMonthRange(today);
+  return from === month.from && to === month.to;
 }
 
 export function statusLabel(status: InvoiceStatus) {

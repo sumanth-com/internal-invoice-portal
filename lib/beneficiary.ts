@@ -111,6 +111,15 @@ export function normalizeBeneficiaryStatus(
   return "all";
 }
 
+export function beneficiaryListHref(options: { search?: string; status?: BeneficiaryStatusFilter }) {
+  const params = new URLSearchParams();
+  const search = options.search?.trim();
+  if (search) params.set("q", search);
+  if (options.status && options.status !== "all") params.set("status", options.status);
+  const query = params.toString();
+  return query ? `/beneficiaries?${query}` : "/beneficiaries";
+}
+
 export function beneficiaryNotice(value: string | undefined) {
   if (value === "created" || value === "updated" || value === "deleted") {
     return value;
