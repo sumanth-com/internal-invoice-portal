@@ -44,6 +44,7 @@ export type PortalUserFormState = {
 export type PortalUserMutationState = {
   error: string | null;
   saved?: PortalUserRow;
+  deletedId?: string;
 };
 
 export const emptyPortalUserFormState: PortalUserFormState = {

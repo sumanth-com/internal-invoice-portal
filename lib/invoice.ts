@@ -77,11 +77,42 @@ export type BankAccountOption = {
 
 export type CompanyInvoiceDefaults = {
   billFrom: string;
+  fromParty: InvoicePartyFields;
   currency: string;
   paymentTerms: string;
   notes: string;
   gstEnabled: boolean;
   gstRate: number;
+};
+
+export type InvoicePartyFields = {
+  companyName: string;
+  tradeName: string;
+  address: string;
+  state: string;
+  city: string;
+  pincode: string;
+  country: string;
+  gstin: string;
+  pan: string;
+  contactName: string;
+  email: string;
+  phone: string;
+};
+
+export const emptyPartyFields: InvoicePartyFields = {
+  companyName: "",
+  tradeName: "",
+  address: "",
+  state: "",
+  city: "",
+  pincode: "",
+  country: "",
+  gstin: "",
+  pan: "",
+  contactName: "",
+  email: "",
+  phone: "",
 };
 
 export type InvoiceSummary = {
@@ -372,6 +403,114 @@ export function formatCompanyBillFrom(company: {
   ]
     .filter((part): part is string => Boolean(part))
     .join("\n");
+}
+
+export function partyFieldsFromSource(source: {
+  legalName: string;
+  tradeName?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+}): InvoicePartyFields {
+  return {
+    companyName: source.legalName.trim(),
+    tradeName:
+      line(source.tradeName) && line(source.tradeName) !== source.legalName.trim()
+        ? (line(source.tradeName) ?? "")
+        : "",
+    address: [line(source.addressLine1), line(source.addressLine2)].filter(Boolean).join(", "),
+    state: line(source.state) ?? "",
+    city: line(source.city) ?? "",
+    pincode: line(source.postalCode) ?? "",
+    country: line(source.country) ?? "",
+    gstin: line(source.gstin) ?? "",
+    pan: line(source.pan) ?? "",
+    contactName: line(source.contactName) ?? "",
+    email: line(source.email) ?? "",
+    phone: line(source.phone) ?? "",
+  };
+}
+
+export function composePartyFields(fields: InvoicePartyFields) {
+  const locality = [line(fields.city), line(fields.state)].filter(Boolean).join(", ");
+  const cityLine = [locality, line(fields.pincode)].filter(Boolean).join(" ");
+  return [
+    line(fields.companyName),
+    line(fields.tradeName),
+    line(fields.contactName),
+    line(fields.address),
+    cityLine || null,
+    line(fields.country),
+    line(fields.gstin) ? `GSTIN: ${line(fields.gstin)}` : null,
+    line(fields.pan) ? `PAN: ${line(fields.pan)}` : null,
+    line(fields.email),
+    line(fields.phone),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n");
+}
+
+export function parsePartyFields(text: string): InvoicePartyFields {
+  const rows = text
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const take = (prefix: string) => {
+    const index = rows.findIndex((row) => row.toUpperCase().startsWith(prefix));
+    if (index < 0) return "";
+    const value = rows[index].slice(prefix.length).trim();
+    rows.splice(index, 1);
+    return value;
+  };
+  const gstin = take("GSTIN:");
+  const pan = take("PAN:");
+  const emailIndex = rows.findIndex((row) => row.includes("@"));
+  const email = emailIndex >= 0 ? rows.splice(emailIndex, 1)[0] : "";
+  const phoneIndex = rows.findIndex((row) => /^[+\d][\d\s().-]{6,}$/.test(row));
+  const phone = phoneIndex >= 0 ? rows.splice(phoneIndex, 1)[0] : "";
+  const companyName = rows.shift() ?? "";
+  const cityIndex = rows.findIndex((row) => row.includes(","));
+  let city = "";
+  let state = "";
+  let pincode = "";
+  if (cityIndex >= 0) {
+    const cityLine = rows.splice(cityIndex, 1)[0];
+    const [cityPart, rest = ""] = cityLine.split(",");
+    city = cityPart.trim();
+    const tokens = rest.trim().split(/\s+/).filter(Boolean);
+    const last = tokens.at(-1) ?? "";
+    if (tokens.length > 1 && /\d/.test(last)) {
+      pincode = last;
+      state = tokens.slice(0, -1).join(" ");
+    } else {
+      state = tokens.join(" ");
+    }
+  }
+  let country = "";
+  const countryIndex = rows.findLastIndex((row) => !row.includes(",") && !/\d/.test(row));
+  if (countryIndex >= 0) country = rows.splice(countryIndex, 1)[0];
+  return {
+    companyName,
+    tradeName: "",
+    address: rows.join(", "),
+    state,
+    city,
+    pincode,
+    country,
+    gstin,
+    pan,
+    contactName: "",
+    email,
+    phone,
+  };
 }
 
 export function bankAccountLabel(account: Pick<

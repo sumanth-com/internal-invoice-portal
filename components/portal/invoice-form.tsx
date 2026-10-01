@@ -5,18 +5,22 @@ import { ModalBody, ModalFooter, useOptionalModal } from "@/components/portal/mo
 import { createClient } from "@/lib/supabase/client";
 import type { Beneficiary } from "@/lib/beneficiary";
 import {
-  bankAccountLabel,
+  composePartyFields,
   emptyInvoiceFormState,
-  formatBeneficiaryBillTo,
+  emptyPartyFields,
   formatMoney,
+  parsePartyFields,
+  partyFieldsFromSource,
   periodDateBounds,
   previewTotals,
   roundMoney,
   type BankAccountOption,
   type InvoiceDetail,
   type InvoiceFormState,
+  type InvoicePartyFields,
   type InvoicePartyOption,
 } from "@/lib/invoice";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,9 +31,7 @@ import {
   startTransition,
   useActionState,
   useEffect,
-  useId,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -41,11 +43,6 @@ type DraftLine = {
   quantity: string;
   rate: string;
 };
-
-const textareaClass =
-  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-const selectClass =
-  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 function Field({
   id,
@@ -80,116 +77,52 @@ function Field({
   );
 }
 
-function bankOptionLabel(account: BankAccountOption) {
-  return `${bankAccountLabel(account)}${account.isActive ? "" : " (inactive)"}`;
-}
-
-function BankAccountSuggest({
+function BankDetails({
   accounts,
   defaultId,
-  invalid,
+  error,
 }: {
   accounts: BankAccountOption[];
   defaultId: string;
-  invalid?: boolean;
+  error?: string;
 }) {
-  const listId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const initial = accounts.find((account) => account.id === defaultId);
   const [accountId, setAccountId] = useState(defaultId);
-  const [query, setQuery] = useState(initial ? bankOptionLabel(initial) : "");
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const needle = query.trim().toLowerCase();
-  const matches = (
-    needle
-      ? accounts.filter((account) => bankOptionLabel(account).toLowerCase().includes(needle))
-      : accounts
-  ).slice(0, 8);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
-
-  function choose(account: BankAccountOption) {
-    setAccountId(account.id);
-    setQuery(bankOptionLabel(account));
-    setOpen(false);
-  }
+  const account = accounts.find((item) => item.id === accountId) ?? null;
 
   return (
-    <div ref={rootRef} className="relative">
-      <input type="hidden" name="bank_account_id" value={accountId} />
-      <input
-        id="bank_account_id"
-        value={query}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open && matches.length > 0}
-        aria-controls={listId}
-        aria-invalid={invalid || undefined}
-        aria-describedby={invalid ? "bank_account_id-error" : undefined}
-        placeholder="Search saved bank accounts"
-        autoComplete="off"
-        onChange={(event) => {
-          const next = event.target.value;
-          setQuery(next);
-          setOpen(true);
-          const exact = accounts.find((account) => bankOptionLabel(account) === next);
-          setAccountId(exact?.id ?? "");
-        }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            setOpen(false);
-            return;
-          }
-          if (!matches.length) return;
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setOpen(true);
-            setActive((current) => (current + 1) % matches.length);
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setOpen(true);
-            setActive((current) => (current - 1 + matches.length) % matches.length);
-          } else if (event.key === "Enter" && open) {
-            event.preventDefault();
-            choose(matches[active] ?? matches[0]);
-          }
-        }}
-        className={selectClass}
-      />
-      {open && matches.length > 0 ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 text-sm shadow-md"
-        >
-          {matches.map((account, optionIndex) => (
-            <li key={account.id} role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={optionIndex === active}
-                className={cn(
-                  "flex w-full cursor-pointer px-3 py-2 text-left",
-                  optionIndex === active ? "bg-muted" : "hover:bg-muted/70",
-                )}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => choose(account)}
-              >
-                {bankOptionLabel(account)}
-              </button>
-            </li>
-          ))}
-        </ul>
+    <div className="grid gap-3">
+      <input type="hidden" name="bank_account_id" value={account?.id ?? ""} />
+      {accounts.length > 1 ? (
+        <Field id="bank_account_id" label="Bank account" error={error}>
+          <ChoiceSelect
+            id="bank_account_id"
+            label="Bank account"
+            value={accountId}
+            display="label"
+            invalid={Boolean(error)}
+            onValue={setAccountId}
+            choices={accounts.map((item) => ({
+              value: item.id,
+              label: `${item.bankName}${item.isActive ? "" : " (inactive)"}`,
+            }))}
+          />
+        </Field>
       ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field id="bank-account-number" label="Bank account number">
+          <Input id="bank-account-number" value={account?.accountNumber ?? ""} readOnly className="bg-muted/40" />
+        </Field>
+        <Field id="bank-name" label="Bank name">
+          <Input id="bank-name" value={account?.bankName ?? ""} readOnly className="bg-muted/40" />
+        </Field>
+        <Field id="bank-ifsc" label="IFSC code">
+          <Input id="bank-ifsc" value={account?.ifscCode ?? ""} readOnly className="uppercase bg-muted/40" />
+        </Field>
+        <Field id="bank-branch" label="Branch">
+          <Input id="bank-branch" value={account?.branch ?? ""} readOnly className="bg-muted/40" />
+        </Field>
+      </div>
+      {accounts.length <= 1 && error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -244,6 +177,94 @@ function linesFromInvoice(invoice?: InvoiceDetail): DraftLine[] {
   }));
 }
 
+function PartyEditor({
+  idPrefix,
+  fields,
+  onChange,
+  error,
+}: {
+  idPrefix: string;
+  fields: InvoicePartyFields;
+  onChange: (next: InvoicePartyFields) => void;
+  error?: string;
+}) {
+  function setField(key: keyof InvoicePartyFields, value: string) {
+    onChange({ ...fields, [key]: value });
+  }
+
+  return (
+    <div className="grid gap-3">
+      <Field id={`${idPrefix}-company`} label="Company name">
+        <Input
+          id={`${idPrefix}-company`}
+          value={fields.companyName}
+          onChange={(event) => setField("companyName", event.target.value)}
+          maxLength={200}
+        />
+      </Field>
+      <Field id={`${idPrefix}-address`} label="Address">
+        <Input
+          id={`${idPrefix}-address`}
+          value={fields.address}
+          onChange={(event) => setField("address", event.target.value)}
+          maxLength={400}
+        />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field id={`${idPrefix}-state`} label="State">
+          <Input
+            id={`${idPrefix}-state`}
+            value={fields.state}
+            onChange={(event) => setField("state", event.target.value)}
+            maxLength={80}
+          />
+        </Field>
+        <Field id={`${idPrefix}-city`} label="City">
+          <Input
+            id={`${idPrefix}-city`}
+            value={fields.city}
+            onChange={(event) => setField("city", event.target.value)}
+            maxLength={80}
+          />
+        </Field>
+        <Field id={`${idPrefix}-pincode`} label="Pincode">
+          <Input
+            id={`${idPrefix}-pincode`}
+            value={fields.pincode}
+            onChange={(event) => setField("pincode", event.target.value)}
+            maxLength={12}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field id={`${idPrefix}-country`} label="Country">
+          <Input
+            id={`${idPrefix}-country`}
+            value={fields.country}
+            onChange={(event) => setField("country", event.target.value)}
+            maxLength={80}
+          />
+        </Field>
+        <Field id={`${idPrefix}-gstin`} label="GSTIN">
+          <Input
+            id={`${idPrefix}-gstin`}
+            value={fields.gstin}
+            onChange={(event) => setField("gstin", event.target.value.toUpperCase())}
+            maxLength={20}
+            spellCheck={false}
+            className="uppercase"
+          />
+        </Field>
+      </div>
+      {error ? (
+        <p id={`${idPrefix}-error`} className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function InvoiceForm({
   mode,
   variant = "page",
@@ -261,6 +282,7 @@ export function InvoiceForm({
   bankAccounts: BankAccountOption[];
   defaults: {
     billFrom: string;
+    fromParty: InvoicePartyFields;
     currency: string;
     paymentTerms: string;
     notes: string;
@@ -278,7 +300,12 @@ export function InvoiceForm({
   );
   const errors = state.fieldErrors;
   const [beneficiaryId, setBeneficiaryId] = useState(invoice?.beneficiaryId ?? "");
-  const [billTo, setBillTo] = useState(invoice?.billTo ?? "");
+  const [billToParty, setBillToParty] = useState<InvoicePartyFields>(() =>
+    invoice?.billTo ? parsePartyFields(invoice.billTo) : emptyPartyFields,
+  );
+  const [billFromParty, setBillFromParty] = useState<InvoicePartyFields>(() =>
+    invoice?.billFrom ? parsePartyFields(invoice.billFrom) : (defaults.fromParty ?? parsePartyFields(defaults.billFrom)),
+  );
   const [gstEnabled, setGstEnabled] = useState(invoice?.gstEnabled ?? defaults.gstEnabled);
   const [gstRate, setGstRate] = useState(
     String(invoice?.gstRate ?? defaults.gstRate),
@@ -338,7 +365,7 @@ export function InvoiceForm({
   function chooseBeneficiary(nextId: string) {
     setBeneficiaryId(nextId);
     const beneficiary = beneficiaries.find((item) => item.id === nextId);
-    setBillTo(beneficiary ? formatBeneficiaryBillTo(beneficiary) : "");
+    setBillToParty(beneficiary ? partyFieldsFromSource(beneficiary) : emptyPartyFields);
   }
 
   function updateLine(key: string, patch: Partial<DraftLine>) {
@@ -412,23 +439,26 @@ export function InvoiceForm({
                 error={errors.beneficiary_id}
               >
                 <div className="flex gap-2">
-                  <select
+                  <input type="hidden" name="beneficiary_id" value={beneficiaryId} />
+                  <ChoiceSelect
                     id="beneficiary_id"
-                    name="beneficiary_id"
-                    required
+                    label="Beneficiary"
                     value={beneficiaryId}
-                    onChange={(event) => chooseBeneficiary(event.target.value)}
-                    aria-invalid={Boolean(errors.beneficiary_id) || undefined}
-                    className={cn(selectClass, "min-w-0")}
-                  >
-                    <option value="">Select a beneficiary</option>
-                    {beneficiaries.map((beneficiary) => (
-                      <option key={beneficiary.id} value={beneficiary.id}>
-                        {beneficiary.legalName}
-                        {beneficiary.isActive ? "" : " (inactive)"}
-                      </option>
-                    ))}
-                  </select>
+                    display="label"
+                    invalid={Boolean(errors.beneficiary_id)}
+                    onValue={(next) => {
+                      markDirty();
+                      chooseBeneficiary(next);
+                    }}
+                    choices={[
+                      { value: "", label: "Select a beneficiary" },
+                      ...beneficiaries.map((beneficiary) => ({
+                        value: beneficiary.id,
+                        label: `${beneficiary.legalName}${beneficiary.isActive ? "" : " (inactive)"}`,
+                      })),
+                    ]}
+                    className="min-w-0 flex-1"
+                  />
                   {onAddBeneficiary ? (
                     <Button
                       type="button"
@@ -441,7 +471,7 @@ export function InvoiceForm({
                         onAddBeneficiary((saved) => {
                           markDirty();
                           setBeneficiaryId(saved.id);
-                          setBillTo(formatBeneficiaryBillTo(saved));
+                          setBillToParty(partyFieldsFromSource(saved));
                         })
                       }
                     >
@@ -462,38 +492,24 @@ export function InvoiceForm({
             )}
           </Section>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Section
-              title="Bill to"
-              description="Filled from the selected beneficiary. Saved with the invoice, so later edits to the beneficiary do not change it."
-            >
-              <Field id="bill_to" label="Bill to" labelClassName="sr-only" error={errors.bill_to}>
-                <textarea
-                  id="bill_to"
-                  name="bill_to"
-                  value={billTo}
-                  onChange={(event) => setBillTo(event.target.value)}
-                  rows={7}
-                  maxLength={2000}
-                  placeholder="Select a beneficiary to fill this in."
-                  className={textareaClass}
-                />
-              </Field>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Section title="Bill to">
+              <input type="hidden" name="bill_to" value={composePartyFields(billToParty)} />
+              <PartyEditor
+                idPrefix="bill_to"
+                fields={billToParty}
+                onChange={setBillToParty}
+                error={errors.bill_to}
+              />
             </Section>
-            <Section
-              title="Bill from"
-              description="Filled from company settings and saved with the invoice."
-            >
-              <Field id="bill_from" label="Bill from" labelClassName="sr-only" error={errors.bill_from}>
-                <textarea
-                  id="bill_from"
-                  name="bill_from"
-                  defaultValue={invoice?.billFrom ?? defaults.billFrom}
-                  rows={7}
-                  maxLength={2000}
-                  className={textareaClass}
-                />
-              </Field>
+            <Section title="Bill from">
+              <input type="hidden" name="bill_from" value={composePartyFields(billFromParty)} />
+              <PartyEditor
+                idPrefix="bill_from"
+                fields={billFromParty}
+                onChange={setBillFromParty}
+                error={errors.bill_from}
+              />
               {!defaults.billFrom && mode === "create" ? (
                 <p className="mt-3 text-xs text-muted-foreground">
                   Company settings are not saved yet, so Bill From starts empty. Enter it before issuing.
@@ -502,38 +518,18 @@ export function InvoiceForm({
             </Section>
           </div>
 
-          <Section title="Bank and payment">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="bank_account_id" label="Bank account" error={errors.bank_account_id}>
-                <BankAccountSuggest
-                  accounts={bankAccounts}
-                  defaultId={
-                    invoice
-                      ? (invoice.bankAccountId ?? "")
-                      : (bankAccounts.find((account) => account.isDefault)?.id ?? "")
-                  }
-                  invalid={Boolean(errors.bank_account_id)}
-                />
-              </Field>
-              <Field id="payment_terms" label="Payment terms" error={errors.payment_terms}>
-                <Input
-                  id="payment_terms"
-                  name="payment_terms"
-                  defaultValue={invoice?.paymentTerms ?? defaults.paymentTerms}
-                  maxLength={500}
-                />
-              </Field>
-              <Field id="notes" label="Notes" error={errors.notes} className="sm:col-span-2">
-                <textarea
-                  id="notes"
-                  name="notes"
-                  defaultValue={invoice?.notes ?? defaults.notes}
-                  rows={2}
-                  maxLength={2000}
-                  className={textareaClass}
-                />
-              </Field>
-            </div>
+          <Section title="Bank details">
+            <BankDetails
+              accounts={bankAccounts}
+              defaultId={
+                invoice
+                  ? (invoice.bankAccountId ?? "")
+                  : (bankAccounts.find((account) => account.isDefault)?.id ?? bankAccounts[0]?.id ?? "")
+              }
+              error={errors.bank_account_id}
+            />
+            <input type="hidden" name="payment_terms" value={invoice?.paymentTerms ?? defaults.paymentTerms} />
+            <input type="hidden" name="notes" value={invoice?.notes ?? defaults.notes} />
           </Section>
 
           <Section
@@ -674,7 +670,8 @@ export function InvoiceForm({
           </Section>
         </div>
 
-        <div className="min-w-0 xl:sticky xl:top-0 xl:self-start">
+        <div className="relative min-w-0 xl:sticky xl:top-4 xl:z-10 xl:self-start sm:xl:top-6">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-full hidden h-4 bg-muted/30 xl:block sm:h-6" />
           <Section
             title="GST and totals"
             description="Preview only. The database calculates the saved GST, totals, and amount in words."

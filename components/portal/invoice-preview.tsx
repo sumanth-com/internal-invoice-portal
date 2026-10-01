@@ -1,4 +1,4 @@
-import { bankAccountLabel, formatInvoiceDate, formatMoney, type InvoiceDetail } from "@/lib/invoice";
+import { formatInvoiceDate, formatMoney, type InvoiceDetail } from "@/lib/invoice";
 
 function Block({ label, value }: { label: string; value: string | null }) {
   return (
@@ -14,24 +14,20 @@ function Block({ label, value }: { label: string; value: string | null }) {
 export function InvoicePreview({ invoice }: { invoice: InvoiceDetail }) {
   return (
     <article className="rounded-xl border bg-card p-4 shadow-sm md:p-8">
-      <div className="flex flex-col gap-6 border-b pb-6 sm:flex-row sm:justify-between">
+      <div className="grid grid-cols-2 gap-6 border-b pb-6">
         <Block label="Bill from" value={invoice.billFrom} />
-        <div className="sm:text-right">
+        <Block label="Bill to" value={invoice.billTo} />
+      </div>
+
+      <div className="grid gap-4 border-b py-6 text-sm sm:grid-cols-2">
+        <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Invoice
           </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight">
-            {invoice.invoiceNumber}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {formatInvoiceDate(invoice.invoiceDate)}
-          </p>
+          <p className="mt-2 text-xl font-semibold tracking-tight">{invoice.invoiceNumber}</p>
+          <p className="mt-1 text-muted-foreground">{formatInvoiceDate(invoice.invoiceDate)}</p>
         </div>
-      </div>
-
-      <div className="grid gap-6 border-b py-6 sm:grid-cols-2">
-        <Block label="Bill to" value={invoice.billTo} />
-        <div className="grid gap-3 text-sm sm:justify-items-end">
+        <div className="grid gap-3 sm:justify-items-end">
           <p>
             <span className="text-muted-foreground">Beneficiary </span>
             {invoice.beneficiaryName}
@@ -106,18 +102,6 @@ export function InvoicePreview({ invoice }: { invoice: InvoiceDetail }) {
         </div>
         <p className="pt-2 text-muted-foreground">{invoice.amountInWords}</p>
       </div>
-
-      {invoice.bank ? (
-        <div className="mt-6 border-t pt-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Bank account
-          </p>
-          <p className="mt-2 text-sm">{bankAccountLabel(invoice.bank)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {[invoice.bank.branch, invoice.bank.ifscCode].filter(Boolean).join(" · ") || "—"}
-          </p>
-        </div>
-      ) : null}
 
       {invoice.notes ? (
         <div className="mt-6 border-t pt-6">

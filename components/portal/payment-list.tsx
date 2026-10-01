@@ -3,6 +3,7 @@
 import { IconAction } from "@/components/portal/icon-action";
 import { DeletePaymentDialog, EditPaymentDialog } from "@/components/portal/payment-edit-dialog";
 import { RecordPaymentDialog } from "@/components/portal/record-payment-dialog";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { usePortalModals } from "@/components/portal/portal-modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +20,10 @@ import {
   type PaymentRecord,
   type RecordedPayment,
 } from "@/lib/payment";
-import { cn } from "@/lib/utils";
-import { ChevronDown, Pencil, Search, Trash2 } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useCallback, useEffect, useState, type ReactNode } from "react";
-
-const fieldClass =
-  "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
+import { startTransition, useCallback, useEffect, useState } from "react";
 
 function matchesFilters(data: PaymentListData, payment: PaymentRecord) {
   if (data.beneficiary !== "all" && payment.beneficiaryId !== data.beneficiary) return false;
@@ -72,29 +69,6 @@ function applyBalance(invoices: PayableInvoice[], saved: RecordedPayment) {
     },
     ...others,
   ];
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  children,
-  className,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("relative w-full sm:w-44", className)}>
-      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={cn(fieldClass, "pl-3 pr-8")}>
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-    </div>
-  );
 }
 
 export function PaymentList({
@@ -215,38 +189,41 @@ export function PaymentList({
               className="h-9 bg-transparent py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
           </div>
-          <FilterSelect
+          <ChoiceSelect
+            id="payment-filter-beneficiary"
             label="Beneficiary"
             value={beneficiary}
-            onChange={(value) => {
+            display="label"
+            className="w-full sm:w-52"
+            menuClassName="min-w-56"
+            onValue={(value) => {
               setBeneficiary(value);
               pushFilters({ beneficiary: value });
             }}
-            className="sm:w-52"
-          >
-            <option value="all">All beneficiaries</option>
-            {beneficiaries.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </FilterSelect>
-          <FilterSelect
+            choices={[
+              { value: "all", label: "All beneficiaries" },
+              ...beneficiaries.map((item) => ({ value: item.id, label: item.name })),
+            ]}
+          />
+          <ChoiceSelect
+            id="payment-filter-mode"
             label="Payment mode"
             value={mode}
-            onChange={(value) => {
-              const next = value === "all" || PAYMENT_MODES.includes(value as PaymentMode) ? (value as PaymentMode | "all") : "all";
+            display="label"
+            className="w-full sm:w-44"
+            onValue={(value) => {
+              const next =
+                value === "all" || PAYMENT_MODES.includes(value as PaymentMode)
+                  ? (value as PaymentMode | "all")
+                  : "all";
               setMode(next);
               pushFilters({ mode: next });
             }}
-          >
-            <option value="all">All modes</option>
-            {PAYMENT_MODES.map((item) => (
-              <option key={item} value={item}>
-                {paymentModeLabel(item)}
-              </option>
-            ))}
-          </FilterSelect>
+            choices={[
+              { value: "all", label: "All modes" },
+              ...PAYMENT_MODES.map((item) => ({ value: item, label: paymentModeLabel(item) })),
+            ]}
+          />
           <Input
             type="date"
             value={from}

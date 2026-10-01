@@ -40,7 +40,7 @@ async function SettingsPageContent() {
   if (!user?.isActive || user.role !== "admin") redirect("/dashboard");
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader
         title="Settings"
         description="Company details, logo, GST defaults, bank accounts, and invoice numbering."

@@ -165,7 +165,7 @@ export function parseBeneficiaryForm(
     fieldText(formData, "contact_name"),
     120,
     "contact_name",
-    "Contact person",
+    "Contact person name",
     errors,
   );
 
@@ -189,7 +189,7 @@ export function parseBeneficiaryForm(
       digits.length < 7 ||
       digits.length > 15
     ) {
-      errors.phone = "Enter a valid phone number.";
+      errors.phone = "Enter a valid mobile number.";
     } else {
       phone = phoneText;
     }

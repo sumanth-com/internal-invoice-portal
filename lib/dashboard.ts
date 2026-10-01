@@ -7,9 +7,15 @@ export type DashboardInvoice = {
   invoiceNumber: string;
   invoiceDate: string;
   status: InvoiceStatus;
+  subtotal: number;
+  gstAmount: number;
   total: number;
+  amountPaid: number;
+  outstanding: number;
   currency: string;
+  beneficiaryId: string;
   beneficiaryName: string;
+  beneficiaryEmail: string | null;
 };
 
 export type DashboardData = {
@@ -48,6 +54,12 @@ function beneficiaryName(
   if (legalName) return legalName;
   const billedTo = billTo?.trim();
   return billedTo || "—";
+}
+
+function embeddedBeneficiary(
+  value: { legal_name: string; email: string | null } | { legal_name: string; email: string | null }[] | null,
+) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 async function countInvoices(
@@ -99,7 +111,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
   let invoiceQuery = supabase
     .from("invoices")
     .select(
-      "id, invoice_number, invoice_date, status, total, currency, bill_to, beneficiary_id, beneficiaries(legal_name)",
+      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, currency, bill_to, beneficiary_id, beneficiaries(legal_name, email)",
     )
     .order("created_at", { ascending: false })
     .limit(listLimit + 1);
@@ -125,13 +137,29 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
   const truncated = rows.length > listLimit;
   const visible = truncated ? rows.slice(0, listLimit) : rows;
   const names = new Map<string, string>();
+  const emails = new Map<string, string | null>();
   for (const row of visible) {
-    const embedded = row.beneficiaries as
-      | { legal_name: string }
-      | { legal_name: string }[]
-      | null;
-    const record = Array.isArray(embedded) ? embedded[0] : embedded;
+    const record = embeddedBeneficiary(row.beneficiaries);
     if (record?.legal_name) names.set(row.beneficiary_id, record.legal_name);
+    emails.set(row.beneficiary_id, record?.email?.trim() || null);
+  }
+
+  const balances = new Map<string, { amountPaid: number; outstanding: number }>();
+  if (visible.length > 0) {
+    const balanceResult = await supabase
+      .from("invoice_balances")
+      .select("invoice_id, amount_paid, outstanding")
+      .in(
+        "invoice_id",
+        visible.map((row) => row.id),
+      );
+    if (balanceResult.error) throw balanceResult.error;
+    for (const row of balanceResult.data ?? []) {
+      balances.set(row.invoice_id, {
+        amountPaid: Number(row.amount_paid),
+        outstanding: Number(row.outstanding),
+      });
+    }
   }
 
   return {
@@ -142,14 +170,29 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     beneficiaryCount,
     search,
     truncated,
-    invoices: visible.map((row) => ({
-      id: row.id,
-      invoiceNumber: row.invoice_number,
-      invoiceDate: row.invoice_date,
-      status: isInvoiceStatus(row.status) ? row.status : "draft",
-      total: Number(row.total),
-      currency: row.currency,
-      beneficiaryName: beneficiaryName(row.bill_to, names, row.beneficiary_id),
-    })),
+    invoices: visible.map((row) => {
+      const status = isInvoiceStatus(row.status) ? row.status : "draft";
+      const totalAmount = Number(row.total);
+      const balance = balances.get(row.id);
+      const amountPaid = balance?.amountPaid ?? 0;
+      const outstanding =
+        balance?.outstanding ??
+        (status === "draft" || status === "cancelled" ? 0 : Math.max(totalAmount - amountPaid, 0));
+      return {
+        id: row.id,
+        invoiceNumber: row.invoice_number,
+        invoiceDate: row.invoice_date,
+        status,
+        subtotal: Number(row.subtotal),
+        gstAmount: Number(row.gst_amount),
+        total: totalAmount,
+        amountPaid,
+        outstanding,
+        currency: row.currency,
+        beneficiaryId: row.beneficiary_id,
+        beneficiaryName: beneficiaryName(row.bill_to, names, row.beneficiary_id),
+        beneficiaryEmail: emails.get(row.beneficiary_id) ?? null,
+      };
+    }),
   };
 }

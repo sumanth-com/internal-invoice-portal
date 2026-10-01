@@ -1,5 +1,6 @@
-import { DashboardActions, DashboardView } from "@/components/portal/dashboard-view";
-import { PageHeader, StatCardsSkeleton, TableSkeleton } from "@/components/portal/skeletons";
+import { DashboardDateCard } from "@/components/portal/dashboard-date";
+import { DashboardView } from "@/components/portal/dashboard-view";
+import { StatCardsSkeleton } from "@/components/portal/skeletons";
 import { loadDashboard } from "@/lib/dashboard";
 import { Suspense } from "react";
 
@@ -11,7 +12,13 @@ function DashboardFallback() {
   return (
     <>
       <StatCardsSkeleton count={4} />
-      <TableSkeleton label="Loading invoices…" />
+      <div className="grid overflow-hidden rounded-[28px] lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+        <div className="h-80 animate-pulse bg-muted" />
+        <div className="h-80 animate-pulse bg-primary/30" />
+      </div>
+      <p className="sr-only" role="status">
+        Loading invoices…
+      </p>
     </>
   );
 }
@@ -44,12 +51,14 @@ export default function DashboardPage({
   searchParams: Promise<{ q?: string | string[] }>;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader
-        title="Dashboard"
-        description="Invoice activity for the portal."
-        actions={<DashboardActions />}
-      />
+    <div className="flex w-full flex-col gap-6 lg:h-full lg:min-h-0 lg:overflow-hidden">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Invoice activity for the portal.</p>
+        </div>
+        <DashboardDateCard />
+      </div>
       <Suspense fallback={<DashboardFallback />}>
         <DashboardContent searchParams={searchParams} />
       </Suspense>

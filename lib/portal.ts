@@ -6,6 +6,7 @@ export type PortalUser = {
   fullName: string | null;
   role: AppRole;
   isActive: boolean;
+  avatarUrl: string | null;
 };
 
 export function roleLabel(role: AppRole) {

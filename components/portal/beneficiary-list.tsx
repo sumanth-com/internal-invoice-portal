@@ -19,19 +19,78 @@ import {
   type BeneficiarySummary,
 } from "@/lib/beneficiary";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Eye, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronDown, CircleCheck, CircleOff, Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 const fieldClass =
   "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
 
-function StatCard({ label, value }: { label: string; value: number }) {
+const beneficiaryWaves = {
+  total: {
+    back: "M0 46C78 46 128 22 206 30C286 38 338 16 400 24V120H0Z",
+    front: "M0 74C92 74 146 52 224 58C302 64 348 46 400 52V120H0Z",
+    backClass: "fill-sky-100 dark:fill-sky-900",
+    frontClass: "fill-sky-200 dark:fill-sky-700",
+  },
+  active: {
+    back: "M0 34C86 34 132 54 210 44C286 34 340 22 400 30V120H0Z",
+    front: "M0 64C96 64 150 82 228 70C306 58 352 50 400 56V120H0Z",
+    backClass: "fill-violet-100 dark:fill-violet-900",
+    frontClass: "fill-violet-200 dark:fill-violet-700",
+  },
+  inactive: {
+    back: "M0 42C72 28 138 24 214 38C292 52 346 36 400 26V120H0Z",
+    front: "M0 70C84 56 148 52 226 66C304 80 350 66 400 54V120H0Z",
+    backClass: "fill-amber-100 dark:fill-amber-900",
+    frontClass: "fill-amber-200 dark:fill-amber-700",
+  },
+} as const;
+
+function StatCard({
+  label,
+  value,
+  href,
+  active,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  href: string;
+  active: boolean;
+  icon: typeof Users;
+  tone: keyof typeof beneficiaryWaves;
+}) {
+  const wave = beneficiaryWaves[tone];
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
-    </section>
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "relative flex min-h-[168px] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm outline-none transition hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+    >
+      <div className="relative z-10 flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+        </div>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground">
+          <Icon className="size-4" />
+        </span>
+      </div>
+      <svg
+        viewBox="0 0 400 120"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] w-full"
+        aria-hidden
+      >
+        <path d={wave.back} className={wave.backClass} />
+        <path d={wave.front} className={wave.frontClass} />
+      </svg>
+    </Link>
   );
 }
 
@@ -205,9 +264,30 @@ export function BeneficiaryList({
       ) : null}
 
       <div className="grid shrink-0 gap-3 sm:grid-cols-3">
-        <StatCard label="Total beneficiaries" value={data.total} />
-        <StatCard label="Active" value={data.active} />
-        <StatCard label="Inactive" value={data.inactive} />
+        <StatCard
+          label="Total beneficiaries"
+          value={data.total}
+          href={beneficiaryListHref({ search, status: "all" })}
+          active={status === "all"}
+          icon={Users}
+          tone="total"
+        />
+        <StatCard
+          label="Active"
+          value={data.active}
+          href={beneficiaryListHref({ search, status: "active" })}
+          active={status === "active"}
+          icon={CircleCheck}
+          tone="active"
+        />
+        <StatCard
+          label="Inactive"
+          value={data.inactive}
+          href={beneficiaryListHref({ search, status: "inactive" })}
+          active={status === "inactive"}
+          icon={CircleOff}
+          tone="inactive"
+        />
       </div>
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -342,11 +422,12 @@ export function BeneficiaryList({
       <Modal
         open={viewOpen}
         onClose={() => setViewOpen(false)}
+        size="md"
         title={viewing?.legalName ?? "Beneficiary"}
         description={viewing ? undefined : "Loading beneficiary details."}
       >
         <ModalBody>
-          <div className="flex flex-col gap-5 p-4 sm:p-6">
+          <div className="flex flex-col gap-4 p-4">
             {viewError ? (
               <p role="alert" className="text-sm text-destructive">
                 {viewError}
@@ -367,7 +448,7 @@ export function BeneficiaryList({
                     This beneficiary is used on invoices, so it cannot be deleted. Mark it inactive instead.
                   </p>
                 ) : null}
-                <dl className="grid gap-5 sm:grid-cols-2">
+                <dl className="grid gap-3 sm:grid-cols-2">
                   <DetailItem label="Contact person">{display(viewing.contactName)}</DetailItem>
                   <DetailItem label="Email">{display(viewing.email)}</DetailItem>
                   <DetailItem label="Phone">{display(viewing.phone)}</DetailItem>
@@ -389,7 +470,7 @@ export function BeneficiaryList({
             )}
           </div>
         </ModalBody>
-        <ModalFooter>
+        <ModalFooter className="px-4 py-2.5">
           <Button type="button" variant="outline" onClick={() => setViewOpen(false)}>
             Close
           </Button>

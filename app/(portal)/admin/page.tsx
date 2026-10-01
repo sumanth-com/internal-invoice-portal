@@ -22,7 +22,7 @@ function AdminSkeleton() {
 
 function AdminFallback() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div>
         <span className="block h-7 w-56 animate-pulse rounded bg-muted" />
         <span className="mt-3 block h-4 w-full max-w-md animate-pulse rounded bg-muted" />
@@ -39,7 +39,7 @@ async function AdminGate({ searchParams }: { searchParams: SearchParams }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader
         title="Admin Management"
         description="Invite internal users and manage roles and access."

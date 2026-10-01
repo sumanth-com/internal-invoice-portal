@@ -87,56 +87,33 @@ export function InvoicePayments({
         ) : null}
       </div>
 
-      <dl className="grid gap-4 border-b p-4 sm:grid-cols-3">
-        <div>
-          <dt className="text-sm text-muted-foreground">Total</dt>
-          <dd className="mt-1 text-lg font-semibold tabular-nums">
-            {formatMoney(invoice.total, invoice.currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted-foreground">Paid</dt>
-          <dd className="mt-1 text-lg font-semibold tabular-nums">
-            {formatMoney(balance.amountPaid, invoice.currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm text-muted-foreground">Outstanding</dt>
-          <dd className="mt-1 text-lg font-semibold tabular-nums">
-            {formatMoney(balance.outstanding, invoice.currency)}
-          </dd>
-        </div>
-      </dl>
-
       {payments.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">No payments recorded.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-sm">
-            <thead className="border-b text-left text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Mode</th>
-                <th className="px-4 py-3 font-medium">Reference / UTR</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Created by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((payment) => (
-                <tr key={payment.id} className="border-b last:border-0">
-                  <td className="px-4 py-3">{formatInvoiceDate(payment.paymentDate)}</td>
-                  <td className="px-4 py-3">{paymentModeLabel(payment.paymentMode)}</td>
-                  <td className="px-4 py-3">{payment.reference?.trim() || "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatMoney(payment.amount, invoice.currency)}
-                  </td>
-                  <td className="px-4 py-3">{payment.createdByName}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="divide-y">
+          {payments.map((payment) => (
+            <li key={payment.id} className="space-y-2 px-4 py-3 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-medium">{formatInvoiceDate(payment.paymentDate)}</p>
+                <p className="font-semibold tabular-nums">{formatMoney(payment.amount, invoice.currency)}</p>
+              </div>
+              <dl className="space-y-1 text-muted-foreground">
+                <div className="flex justify-between gap-3">
+                  <dt>Mode</dt>
+                  <dd className="text-right text-foreground">{paymentModeLabel(payment.paymentMode)}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Reference</dt>
+                  <dd className="text-right text-foreground">{payment.reference?.trim() || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Recorded by</dt>
+                  <dd className="text-right text-foreground">{payment.createdByName}</dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

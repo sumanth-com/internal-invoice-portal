@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Beneficiary } from "@/lib/beneficiary";
 import type { EmailInvoiceState } from "@/lib/email/invoice-email-state";
 import { formatMoney } from "@/lib/invoice";
+import { cn } from "@/lib/utils";
 import { Check, Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, useTransition } from "react";
@@ -180,6 +181,7 @@ export function InvoiceEmailButton({
   beneficiaryEmail,
   total,
   currency,
+  compact = false,
 }: {
   id: string;
   number: string;
@@ -188,6 +190,7 @@ export function InvoiceEmailButton({
   beneficiaryEmail: string | null;
   total: number;
   currency: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
@@ -201,10 +204,34 @@ export function InvoiceEmailButton({
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        <Mail />
-        Email Invoice
-      </Button>
+      {compact ? (
+        <span className="group/tip relative inline-flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            aria-label="Email invoice"
+            onClick={() => setOpen(true)}
+          >
+            <Mail />
+            <span className="sr-only">Email invoice</span>
+          </Button>
+          <span
+            role="tooltip"
+            className={cn(
+              "pointer-events-none absolute right-0 top-full z-20 mt-1.5 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-sm transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100",
+            )}
+          >
+            Email invoice
+          </span>
+        </span>
+      ) : (
+        <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+          <Mail />
+          Email Invoice
+        </Button>
+      )}
       <Modal
         open={open}
         onClose={() => setOpen(false)}

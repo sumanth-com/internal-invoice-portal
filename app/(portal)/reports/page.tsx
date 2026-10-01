@@ -62,7 +62,7 @@ async function ReportsContent({ searchParams }: { searchParams: SearchParams }) 
 
 export default function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden">
       <Suspense fallback={<ReportsSkeleton />}>
         <ReportsContent searchParams={searchParams} />
       </Suspense>

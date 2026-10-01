@@ -65,4 +65,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  .portal-shell {
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 262 83% 58%;
+    --accent: 262 80% 96%;
+    --accent-foreground: 262 47% 28%;
+  }
 }

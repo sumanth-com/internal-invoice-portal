@@ -58,7 +58,7 @@ export function Modal({
   onClose: () => void;
   title: string;
   description?: string;
-  size?: "lg" | "xl";
+  size?: "md" | "lg" | "xl";
   discardMessage?: string;
   children: ReactNode;
 }) {
@@ -149,21 +149,25 @@ export function Modal({
           if (event.target === event.currentTarget) requestClose();
         }}
         className={cn(
-          "m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-0 text-foreground",
-          "sm:m-auto sm:w-[94vw]",
-          size === "xl" ? "sm:h-[92vh] sm:max-w-[1440px]" : "sm:h-fit sm:max-w-4xl",
+          "m-0 flex h-dvh max-h-none w-screen max-w-none flex-col overflow-y-auto border-0 bg-transparent p-4 text-foreground sm:p-6",
           "backdrop:bg-black/50 backdrop:opacity-0 backdrop:transition-opacity backdrop:duration-150",
           "data-[visible=true]:backdrop:opacity-100",
         )}
       >
         <div
           className={cn(
-            "relative flex h-full max-h-dvh flex-col overflow-hidden bg-background shadow-2xl sm:max-h-[92vh] sm:rounded-2xl sm:border",
+            "relative m-auto flex min-h-0 w-full max-h-[92vh] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl",
+            size === "xl" ? "h-[92vh] max-w-[1440px]" : size === "md" ? "h-auto max-w-2xl" : "h-auto max-w-4xl",
             "transition duration-150 ease-out motion-reduce:transition-none",
             visible ? "translate-y-0 opacity-100 sm:scale-100" : "translate-y-3 opacity-0 sm:scale-[0.98]",
           )}
         >
-          <header className="flex shrink-0 items-start justify-between gap-4 border-b bg-card px-4 py-4 sm:px-6">
+          <header
+            className={cn(
+              "flex shrink-0 items-start justify-between gap-4 border-b bg-card",
+              size === "md" ? "px-4 py-3" : "px-4 py-4 sm:px-6",
+            )}
+          >
             <div className="min-w-0">
               <h2 id={titleId} className="text-lg font-semibold tracking-tight">
                 {title}
@@ -232,7 +236,7 @@ export function Modal({
 
 export function ModalBody({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/30", className)}>
+    <div className={cn("min-h-0 flex-auto overflow-y-auto overscroll-contain bg-muted/30", className)}>
       {children}
     </div>
   );

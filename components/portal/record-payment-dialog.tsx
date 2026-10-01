@@ -2,19 +2,21 @@
 
 import { recordPayment } from "@/app/(portal)/payments/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney, invoiceToday } from "@/lib/invoice";
 import {
   emptyPaymentFormState,
+  isPaymentMode,
   PAYMENT_MODES,
   paymentModeLabel,
   type PayableInvoice,
   type PaymentFormState,
   type RecordedPayment,
 } from "@/lib/payment";
-import { Loader2 } from "lucide-react";
+import { Banknote, Loader2 } from "lucide-react";
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 function Balance({ invoice }: { invoice: PayableInvoice }) {
@@ -54,6 +56,7 @@ function RecordPaymentForm({
   const modal = useModal();
   const [state, formAction, pending] = useActionState(recordPayment, emptyPaymentFormState);
   const [invoiceId, setInvoiceId] = useState(presetId ?? invoices[0]?.id ?? "");
+  const [paymentMode, setPaymentMode] = useState("neft");
   const handled = useRef<PaymentFormState | null>(null);
   const { setBusy, setDirty } = modal;
   const selected = invoices.find((invoice) => invoice.id === invoiceId) ?? null;
@@ -80,10 +83,12 @@ function RecordPaymentForm({
         startTransition(() => formAction(formData));
       }}
       onChange={() => setDirty(true)}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-auto flex-col"
     >
+      <input type="hidden" name="payment_mode" value={paymentMode} />
+      <input type="hidden" name="invoice_id" value={presetId || invoiceId} />
       <ModalBody>
-        <fieldset disabled={pending} className="flex flex-col gap-4 p-4 sm:p-6">
+        <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
           {state.error ? (
             <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {state.error}
@@ -92,26 +97,26 @@ function RecordPaymentForm({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="payment-invoice">Invoice</Label>
-            {presetId ? (
-              <input type="hidden" name="invoice_id" value={presetId} />
-            ) : null}
-            <select
+            <ChoiceSelect
               id="payment-invoice"
-              name={presetId ? undefined : "invoice_id"}
+              label="Invoice"
               value={invoiceId}
+              display="label"
               disabled={Boolean(presetId) || invoices.length === 0}
-              aria-invalid={errors.invoice_id ? true : undefined}
-              aria-describedby={errors.invoice_id ? "payment-invoice-error" : undefined}
-              onChange={(event) => setInvoiceId(event.target.value)}
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm disabled:opacity-70"
-            >
-              {invoices.length === 0 ? <option value="">No issued invoices</option> : null}
-              {invoices.map((invoice) => (
-                <option key={invoice.id} value={invoice.id}>
-                  {invoice.invoiceNumber} · {invoice.beneficiaryName}
-                </option>
-              ))}
-            </select>
+              invalid={Boolean(errors.invoice_id)}
+              onValue={(next) => {
+                setInvoiceId(next);
+                setDirty(true);
+              }}
+              choices={
+                invoices.length === 0
+                  ? [{ value: "", label: "No issued invoices" }]
+                  : invoices.map((invoice) => ({
+                      value: invoice.id,
+                      label: `${invoice.invoiceNumber} · ${invoice.beneficiaryName}`,
+                    }))
+              }
+            />
             {errors.invoice_id ? (
               <p id="payment-invoice-error" className="text-sm text-destructive">
                 {errors.invoice_id}
@@ -125,7 +130,7 @@ function RecordPaymentForm({
 
           {selected ? <Balance invoice={selected} /> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="payment-amount">Amount</Label>
               <Input
@@ -163,20 +168,23 @@ function RecordPaymentForm({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="payment-mode">Payment mode</Label>
-              <select
+              <ChoiceSelect
                 id="payment-mode"
-                name="payment_mode"
-                defaultValue="neft"
-                aria-invalid={errors.payment_mode ? true : undefined}
-                aria-describedby={errors.payment_mode ? "payment-mode-error" : undefined}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-              >
-                {PAYMENT_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {paymentModeLabel(mode)}
-                  </option>
-                ))}
-              </select>
+                label="Payment mode"
+                value={paymentMode}
+                display="label"
+                invalid={Boolean(errors.payment_mode)}
+                onValue={(next) => {
+                  if (isPaymentMode(next)) {
+                    setPaymentMode(next);
+                    setDirty(true);
+                  }
+                }}
+                choices={PAYMENT_MODES.map((mode) => ({
+                  value: mode,
+                  label: paymentModeLabel(mode),
+                }))}
+              />
               {errors.payment_mode ? (
                 <p id="payment-mode-error" className="text-sm text-destructive">
                   {errors.payment_mode}
@@ -191,23 +199,19 @@ function RecordPaymentForm({
                 autoComplete="off"
                 maxLength={120}
                 aria-invalid={errors.reference ? true : undefined}
-                aria-describedby={errors.reference ? "payment-reference-error" : "payment-reference-hint"}
+                aria-describedby={errors.reference ? "payment-reference-error" : undefined}
                 placeholder="Optional"
               />
               {errors.reference ? (
                 <p id="payment-reference-error" className="text-sm text-destructive">
                   {errors.reference}
                 </p>
-              ) : (
-                <p id="payment-reference-hint" className="text-sm text-muted-foreground">
-                  Optional bank reference, UTR, or cheque number.
-                </p>
-              )}
+              ) : null}
             </div>
           </div>
         </fieldset>
       </ModalBody>
-      <ModalFooter>
+      <ModalFooter className="px-4 py-2.5">
         <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
           Cancel
         </Button>
@@ -226,25 +230,40 @@ export function RecordPaymentDialog({
   onSaved,
   label = "Record payment",
   variant = "default",
+  compact = false,
 }: {
   invoices: PayableInvoice[];
   presetId?: string;
   onSaved: (saved: RecordedPayment) => void;
   label?: string;
   variant?: "default" | "outline";
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <Button type="button" variant={variant} onClick={() => setOpen(true)}>
-        {label}
+      <Button
+        type="button"
+        variant={compact ? "ghost" : variant}
+        size={compact ? "icon" : "default"}
+        className={
+          compact
+            ? "size-9 rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            : undefined
+        }
+        aria-label={compact ? "Record payment" : undefined}
+        onClick={() => setOpen(true)}
+      >
+        {compact ? <Banknote /> : null}
+        {compact ? <span className="sr-only">{label}</span> : label}
       </Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
         title="Record payment"
         description="Record a payment the company has already received. This does not collect money online."
+        size="md"
         discardMessage="This payment has not been saved."
       >
         <RecordPaymentForm

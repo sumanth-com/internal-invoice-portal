@@ -8,6 +8,7 @@ import {
 import type { InvoiceMutationState } from "@/lib/invoice";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Ban, Send, Trash2 } from "lucide-react";
 import { startTransition, useActionState, useEffect, useId, useRef, useState } from "react";
 
 const initialState: InvoiceMutationState = { error: null };
@@ -30,6 +31,7 @@ export function IssueInvoiceButton({
         </p>
       ) : null}
       <Button type="submit" disabled={disabled || pending}>
+        <Send />
         {pending ? "Issuing…" : "Issue invoice"}
       </Button>
     </form>
@@ -43,6 +45,7 @@ export function CancelInvoiceButton({ id, number }: { id: string; number: string
   if (!open) {
     return (
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+        <Ban />
         Cancel invoice
       </Button>
     );
@@ -179,6 +182,7 @@ export function DeleteDraftButton({ id, number }: { id: string; number: string }
   return (
     <>
       <Button type="button" variant="destructive" onClick={() => setOpen(true)}>
+        <Trash2 />
         Delete draft
       </Button>
       <DeleteDraftDialog id={id} number={number} open={open} onClose={() => setOpen(false)} />

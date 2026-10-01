@@ -9,12 +9,16 @@ export function IconAction({
   href,
   onClick,
   className,
+  tipSide = "top",
+  tipAlign = "center",
 }: {
   label: string;
   children: ReactNode;
   href?: string;
   onClick?: () => void;
   className?: string;
+  tipSide?: "top" | "bottom";
+  tipAlign?: "center" | "end";
 }) {
   const controlClass = cn("size-8 text-muted-foreground hover:text-foreground", className);
   const control = href ? (
@@ -32,7 +36,11 @@ export function IconAction({
       {control}
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-sm transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100"
+        className={cn(
+          "pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-sm transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100",
+          tipSide === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5",
+          tipAlign === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
+        )}
       >
         {label}
       </span>

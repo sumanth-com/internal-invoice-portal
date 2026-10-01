@@ -11,9 +11,19 @@ import {
   type BeneficiaryField,
   type BeneficiaryFormState,
 } from "@/lib/beneficiary";
+import { ChoiceSelect, SuggestField } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  cityOptions,
+  composePhone,
+  COUNTRIES,
+  DIAL_CODES,
+  postalOptions,
+  splitStoredPhone,
+  stateOptions,
+} from "@/lib/settings-places";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import {
@@ -21,6 +31,7 @@ import {
   useActionState,
   useEffect,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 
@@ -65,12 +76,12 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+    <section className="rounded-xl border bg-card p-3 shadow-sm">
       <h3 className="text-sm font-semibold">{title}</h3>
       {description ? (
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       ) : null}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">{children}</div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -95,6 +106,13 @@ export function BeneficiaryForm({
   onSaved: (beneficiary: Beneficiary) => void;
 }) {
   const modal = useModal();
+  const initialPhone = splitStoredPhone(beneficiary?.phone ?? "", beneficiary?.country ?? "India");
+  const [dial, setDial] = useState(initialPhone.dial);
+  const [national, setNational] = useState(initialPhone.number);
+  const [country, setCountry] = useState(beneficiary?.country ?? "India");
+  const [stateName, setStateName] = useState(beneficiary?.state ?? "");
+  const [city, setCity] = useState(beneficiary?.city ?? "");
+  const [postalCode, setPostalCode] = useState(beneficiary?.postalCode ?? "");
   const action = mode === "create" ? createBeneficiary : updateBeneficiary;
   const [state, formAction, pending] = useActionState<
     BeneficiaryFormState,
@@ -125,14 +143,17 @@ export function BeneficiaryForm({
         startTransition(() => formAction(formData));
       }}
       onChange={() => setDirty(true)}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-auto flex-col"
     >
       {mode === "edit" && beneficiary ? (
         <input type="hidden" name="id" value={beneficiary.id} />
       ) : null}
+      <input type="hidden" name="notes" value={beneficiary?.notes ?? ""} />
+      <input type="hidden" name="is_active" value={beneficiary?.isActive === false ? "" : "on"} />
+      <input type="hidden" name="phone" value={composePhone(dial, national)} />
 
       <ModalBody>
-        <fieldset disabled={pending} className="flex flex-col gap-5 p-4 sm:p-6">
+        <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
           {state.error ? (
             <p
               role="alert"
@@ -142,7 +163,7 @@ export function BeneficiaryForm({
             </p>
           ) : null}
 
-          <Section title="Company" description="The legal name appears on invoices raised to this beneficiary.">
+          <Section title="Company">
             <Field
               id="legal_name"
               label="Company / legal name"
@@ -159,7 +180,7 @@ export function BeneficiaryForm({
                 data-autofocus
               />
             </Field>
-            <Field id="contact_name" label="Contact person" error={errors.contact_name}>
+            <Field id="contact_name" label="Contact person name" error={errors.contact_name}>
               <Input
                 {...textProps("contact_name", errors.contact_name)}
                 defaultValue={beneficiary?.contactName ?? ""}
@@ -176,18 +197,43 @@ export function BeneficiaryForm({
                 autoComplete="email"
               />
             </Field>
-            <Field id="phone" label="Phone" error={errors.phone}>
-              <Input
-                {...textProps("phone", errors.phone)}
-                type="tel"
-                defaultValue={beneficiary?.phone ?? ""}
-                maxLength={30}
-                autoComplete="tel"
-              />
+            <Field
+              id="phone-number"
+              label="Mobile number"
+              error={errors.phone}
+              className="sm:col-span-2"
+            >
+              <div className="flex gap-2">
+                <ChoiceSelect
+                  id="phone-code"
+                  label="Country code"
+                  value={dial}
+                  onValue={(next) => {
+                  setDial(next);
+                  setDirty(true);
+                }}
+                  choices={DIAL_CODES.map((item) => ({
+                    value: item.code,
+                    label: item.country,
+                  }))}
+                  className="w-[5.5rem] shrink-0"
+                  menuClassName="min-w-64"
+                />
+                <Input
+                  id="phone-number"
+                  value={national}
+                  onChange={(event) => setNational(event.target.value)}
+                  maxLength={24}
+                  autoComplete="tel-national"
+                  aria-invalid={errors.phone ? true : undefined}
+                  aria-describedby={errors.phone ? "phone-number-error" : undefined}
+                  className="min-w-0"
+                />
+              </div>
             </Field>
           </Section>
 
-          <Section title="Tax details" description="PAN must match characters 3–12 of the GSTIN when both are entered.">
+          <Section title="Tax details">
             <Field id="gstin" label="GSTIN" error={errors.gstin}>
               <Input
                 {...textProps("gstin", errors.gstin)}
@@ -211,12 +257,7 @@ export function BeneficiaryForm({
           </Section>
 
           <Section title="Billing address">
-            <Field
-              id="address_line1"
-              label="Address line 1"
-              error={errors.address_line1}
-              className="sm:col-span-2"
-            >
+            <Field id="address_line1" label="Address line 1" error={errors.address_line1}>
               <Input
                 {...textProps("address_line1", errors.address_line1)}
                 defaultValue={beneficiary?.addressLine1 ?? ""}
@@ -224,12 +265,7 @@ export function BeneficiaryForm({
                 autoComplete="address-line1"
               />
             </Field>
-            <Field
-              id="address_line2"
-              label="Address line 2"
-              error={errors.address_line2}
-              className="sm:col-span-2"
-            >
+            <Field id="address_line2" label="Address line 2" error={errors.address_line2}>
               <Input
                 {...textProps("address_line2", errors.address_line2)}
                 defaultValue={beneficiary?.addressLine2 ?? ""}
@@ -237,69 +273,75 @@ export function BeneficiaryForm({
                 autoComplete="address-line2"
               />
             </Field>
-            <Field id="city" label="City" error={errors.city}>
-              <Input
-                {...textProps("city", errors.city)}
-                defaultValue={beneficiary?.city ?? ""}
+            <Field id="state" label="State" error={errors.state}>
+              <SuggestField
+                id="state"
+                name="state"
+                label="State"
+                value={stateName}
+                onValue={(next) => {
+                  setStateName(next);
+                  setDirty(true);
+                }}
+                options={stateOptions(country)}
                 maxLength={80}
-                autoComplete="address-level2"
+                invalid={Boolean(errors.state)}
+                describedBy={errors.state ? "state-error" : undefined}
               />
             </Field>
-            <Field id="state" label="State" error={errors.state}>
-              <Input
-                {...textProps("state", errors.state)}
-                defaultValue={beneficiary?.state ?? ""}
+            <Field id="city" label="City" error={errors.city}>
+              <SuggestField
+                id="city"
+                name="city"
+                label="City"
+                value={city}
+                onValue={(next) => {
+                  setCity(next);
+                  setDirty(true);
+                }}
+                options={cityOptions(country, stateName)}
                 maxLength={80}
-                autoComplete="address-level1"
+                invalid={Boolean(errors.city)}
+                describedBy={errors.city ? "city-error" : undefined}
               />
             </Field>
             <Field id="postal_code" label="Postal code" error={errors.postal_code}>
-              <Input
-                {...textProps("postal_code", errors.postal_code)}
-                defaultValue={beneficiary?.postalCode ?? ""}
+              <SuggestField
+                id="postal_code"
+                name="postal_code"
+                label="Postal code"
+                value={postalCode}
+                onValue={(next) => {
+                  setPostalCode(next);
+                  setDirty(true);
+                }}
+                options={postalOptions(country, stateName, city)}
                 maxLength={12}
-                autoComplete="postal-code"
+                invalid={Boolean(errors.postal_code)}
+                describedBy={errors.postal_code ? "postal_code-error" : undefined}
               />
             </Field>
             <Field id="country" label="Country" error={errors.country}>
-              <Input
-                {...textProps("country", errors.country)}
-                defaultValue={beneficiary?.country ?? "India"}
+              <SuggestField
+                id="country"
+                name="country"
+                label="Country"
+                value={country}
+                onValue={(next) => {
+                  setCountry(next);
+                  setDirty(true);
+                }}
+                options={COUNTRIES}
                 maxLength={80}
-                autoComplete="country-name"
+                invalid={Boolean(errors.country)}
+                describedBy={errors.country ? "country-error" : undefined}
               />
             </Field>
-          </Section>
-
-          <Section title="Notes and status">
-            <Field id="notes" label="Notes" error={errors.notes} className="sm:col-span-2">
-              <textarea
-                {...textProps("notes", errors.notes)}
-                defaultValue={beneficiary?.notes ?? ""}
-                maxLength={2000}
-                rows={3}
-                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </Field>
-            <label className="flex items-start gap-2 text-sm sm:col-span-2">
-              <input
-                type="checkbox"
-                name="is_active"
-                defaultChecked={beneficiary?.isActive ?? true}
-                className="mt-0.5 size-4 rounded border border-input"
-              />
-              <span>
-                <span className="font-medium">Active</span>
-                <span className="mt-1 block text-muted-foreground">
-                  Inactive beneficiaries stay on file and can be left out of new work.
-                </span>
-              </span>
-            </label>
           </Section>
         </fieldset>
       </ModalBody>
 
-      <ModalFooter>
+      <ModalFooter className="px-4 py-2.5">
         <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
           Cancel
         </Button>

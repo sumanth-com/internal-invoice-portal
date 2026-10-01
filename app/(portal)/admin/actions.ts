@@ -376,3 +376,46 @@ export async function setPortalUserActive(
     saved: mapPortalUser(updated.data[0] as ProfileRow, await invitationAccessFor(id)),
   };
 }
+
+export async function deletePortalUser(
+  _state: PortalUserMutationState,
+  formData: FormData,
+): Promise<PortalUserMutationState> {
+  const actor = await requireAdmin();
+  if (!actor) {
+    return { ...emptyPortalUserMutationState, error: "Only an admin can delete a pending invitation." };
+  }
+
+  const idValue = formData.get("id");
+  const id = typeof idValue === "string" ? idValue : "";
+  if (!isPortalUserId(id)) {
+    return { ...emptyPortalUserMutationState, error: "This user was not found." };
+  }
+  if (id === actor.id) {
+    return { ...emptyPortalUserMutationState, error: "You cannot delete your own account." };
+  }
+
+  const access = await invitationAccessFor(id);
+  if (!access || access.emailConfirmed) {
+    return {
+      ...emptyPortalUserMutationState,
+      error: "Only a pending invitation can be deleted.",
+    };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return {
+      ...emptyPortalUserMutationState,
+      error: "User invites are not configured on the server.",
+    };
+  }
+
+  const removed = await admin.auth.admin.deleteUser(id);
+  if (removed.error) {
+    return { ...emptyPortalUserMutationState, error: "The invitation could not be deleted." };
+  }
+
+  revalidatePath("/admin");
+  return { error: null, deletedId: id };
+}

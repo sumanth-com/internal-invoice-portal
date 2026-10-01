@@ -1,4 +1,5 @@
 import {
+  emptyPartyFields,
   formatBeneficiaryBillTo,
   formatCompanyBillFrom,
   INVOICE_LIST_LIMIT,
@@ -9,6 +10,7 @@ import {
   normalizeInvoiceSearch,
   normalizeInvoiceSort,
   normalizeInvoiceStatusFilter,
+  partyFieldsFromSource,
   type BankAccountOption,
   type CompanyInvoiceDefaults,
   type InvoiceDetail,
@@ -325,6 +327,22 @@ export async function loadInvoiceFormOptions(selected?: {
     );
 
   const company = companyResult.data;
+  const fromParty = company
+    ? partyFieldsFromSource({
+        legalName: company.legal_name,
+        tradeName: company.trade_name,
+        addressLine1: company.address_line1,
+        addressLine2: company.address_line2,
+        city: company.city,
+        state: company.state,
+        postalCode: company.postal_code,
+        country: company.country,
+        email: company.email,
+        phone: company.phone,
+        gstin: company.gstin,
+        pan: company.pan,
+      })
+    : emptyPartyFields;
   const defaults: CompanyInvoiceDefaults = {
     billFrom: company
       ? formatCompanyBillFrom({
@@ -342,6 +360,7 @@ export async function loadInvoiceFormOptions(selected?: {
           pan: company.pan,
         })
       : "",
+    fromParty,
     currency: company?.default_currency ?? "INR",
     paymentTerms: company?.default_payment_terms ?? "",
     notes: company?.invoice_notes ?? "",

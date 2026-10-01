@@ -2,6 +2,7 @@
 
 import { deletePayment, updatePayment } from "@/app/(portal)/payments/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import { formatMoney } from "@/lib/invoice";
 import { cn } from "@/lib/utils";
 import {
   emptyPaymentFormState,
+  isPaymentMode,
   PAYMENT_MODES,
   paymentModeLabel,
   type PaymentDeleteState,
@@ -20,6 +22,11 @@ import { Loader2 } from "lucide-react";
 import { startTransition, useActionState, useEffect, useId, useRef, useState } from "react";
 
 const emptyDeleteState: PaymentDeleteState = { error: null };
+
+const modeChoices = PAYMENT_MODES.map((mode) => ({
+  value: mode,
+  label: paymentModeLabel(mode),
+}));
 
 function EditPaymentForm({
   payment,
@@ -34,6 +41,7 @@ function EditPaymentForm({
   const lock = useRef(false);
   const { setBusy, setDirty } = modal;
   const errors = state.fieldErrors;
+  const [mode, setMode] = useState(payment.paymentMode);
 
   useEffect(() => {
     setBusy(pending);
@@ -58,104 +66,112 @@ function EditPaymentForm({
         startTransition(() => formAction(formData));
       }}
       onChange={() => setDirty(true)}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex min-h-0 flex-auto flex-col"
     >
       <input type="hidden" name="payment_id" value={payment.id} />
       <input type="hidden" name="invoice_id" value={payment.invoiceId} />
+      <input type="hidden" name="payment_mode" value={mode} />
       <ModalBody>
-        <fieldset disabled={pending} className="flex flex-col gap-4 p-4 sm:p-6">
+        <fieldset disabled={pending} className="grid gap-3 p-4 sm:grid-cols-2">
           {state.error ? (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:col-span-2">
               {state.error}
             </p>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-invoice-${payment.id}`}>Invoice</Label>
-              <Input id={`edit-invoice-${payment.id}`} value={payment.invoiceNumber} readOnly />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-beneficiary-${payment.id}`}>Beneficiary</Label>
-              <Input id={`edit-beneficiary-${payment.id}`} value={payment.beneficiaryName} readOnly />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-amount-${payment.id}`}>Amount</Label>
-              <Input
-                id={`edit-amount-${payment.id}`}
-                name="amount"
-                inputMode="decimal"
-                autoComplete="off"
-                required
-                defaultValue={payment.amount.toFixed(2)}
-                aria-invalid={errors.amount ? true : undefined}
-                aria-describedby={errors.amount ? `edit-amount-error-${payment.id}` : undefined}
-              />
-              {errors.amount ? (
-                <p id={`edit-amount-error-${payment.id}`} className="text-sm text-destructive">
-                  {errors.amount}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-date-${payment.id}`}>Payment date</Label>
-              <Input
-                id={`edit-date-${payment.id}`}
-                name="payment_date"
-                type="date"
-                required
-                defaultValue={payment.paymentDate}
-                aria-invalid={errors.payment_date ? true : undefined}
-                aria-describedby={errors.payment_date ? `edit-date-error-${payment.id}` : undefined}
-              />
-              {errors.payment_date ? (
-                <p id={`edit-date-error-${payment.id}`} className="text-sm text-destructive">
-                  {errors.payment_date}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-mode-${payment.id}`}>Payment mode</Label>
-              <select
-                id={`edit-mode-${payment.id}`}
-                name="payment_mode"
-                defaultValue={payment.paymentMode}
-                aria-invalid={errors.payment_mode ? true : undefined}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none"
-              >
-                {PAYMENT_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {paymentModeLabel(mode)}
-                  </option>
-                ))}
-              </select>
-              {errors.payment_mode ? (
-                <p className="text-sm text-destructive">{errors.payment_mode}</p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={`edit-reference-${payment.id}`}>Reference / UTR</Label>
-              <Input
-                id={`edit-reference-${payment.id}`}
-                name="reference"
-                autoComplete="off"
-                maxLength={120}
-                defaultValue={payment.reference ?? ""}
-                placeholder="Optional"
-                aria-invalid={errors.reference ? true : undefined}
-                aria-describedby={errors.reference ? `edit-reference-error-${payment.id}` : undefined}
-              />
-              {errors.reference ? (
-                <p id={`edit-reference-error-${payment.id}`} className="text-sm text-destructive">
-                  {errors.reference}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">Optional bank reference, UTR, or cheque number.</p>
-              )}
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-invoice-${payment.id}`}>Invoice</Label>
+            <Input
+              id={`edit-invoice-${payment.id}`}
+              value={payment.invoiceNumber}
+              readOnly
+              className="bg-muted/50"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-beneficiary-${payment.id}`}>Beneficiary</Label>
+            <Input
+              id={`edit-beneficiary-${payment.id}`}
+              value={payment.beneficiaryName}
+              readOnly
+              className="bg-muted/50"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-amount-${payment.id}`}>Amount</Label>
+            <Input
+              id={`edit-amount-${payment.id}`}
+              name="amount"
+              inputMode="decimal"
+              autoComplete="off"
+              required
+              defaultValue={payment.amount.toFixed(2)}
+              aria-invalid={errors.amount ? true : undefined}
+              aria-describedby={errors.amount ? `edit-amount-error-${payment.id}` : undefined}
+            />
+            {errors.amount ? (
+              <p id={`edit-amount-error-${payment.id}`} className="text-sm text-destructive">
+                {errors.amount}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-date-${payment.id}`}>Payment date</Label>
+            <Input
+              id={`edit-date-${payment.id}`}
+              name="payment_date"
+              type="date"
+              required
+              defaultValue={payment.paymentDate}
+              aria-invalid={errors.payment_date ? true : undefined}
+              aria-describedby={errors.payment_date ? `edit-date-error-${payment.id}` : undefined}
+            />
+            {errors.payment_date ? (
+              <p id={`edit-date-error-${payment.id}`} className="text-sm text-destructive">
+                {errors.payment_date}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-mode-${payment.id}`}>Payment mode</Label>
+            <ChoiceSelect
+              id={`edit-mode-${payment.id}`}
+              label="Payment mode"
+              value={mode}
+              display="label"
+              invalid={Boolean(errors.payment_mode)}
+              onValue={(next) => {
+                if (isPaymentMode(next)) {
+                  setMode(next);
+                  setDirty(true);
+                }
+              }}
+              choices={modeChoices}
+            />
+            {errors.payment_mode ? (
+              <p className="text-sm text-destructive">{errors.payment_mode}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`edit-reference-${payment.id}`}>Reference / UTR</Label>
+            <Input
+              id={`edit-reference-${payment.id}`}
+              name="reference"
+              autoComplete="off"
+              maxLength={120}
+              defaultValue={payment.reference ?? ""}
+              placeholder="Optional"
+              aria-invalid={errors.reference ? true : undefined}
+              aria-describedby={errors.reference ? `edit-reference-error-${payment.id}` : undefined}
+            />
+            {errors.reference ? (
+              <p id={`edit-reference-error-${payment.id}`} className="text-sm text-destructive">
+                {errors.reference}
+              </p>
+            ) : null}
           </div>
         </fieldset>
       </ModalBody>
-      <ModalFooter>
+      <ModalFooter className="px-4 py-2.5">
         <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
           Cancel
         </Button>
@@ -185,6 +201,7 @@ export function EditPaymentDialog({
       onClose={onClose}
       title="Edit payment"
       description="Correct the amount, date, mode, or reference. The payment stays on the same invoice."
+      size="md"
       discardMessage="This payment has not been saved."
     >
       {payment ? (

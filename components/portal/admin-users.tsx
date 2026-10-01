@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  deletePortalUser,
   invitePortalUser,
   resendPortalInvite,
   setPortalUserActive,
@@ -28,7 +29,7 @@ import {
   type PortalUserRow,
 } from "@/lib/portal-users";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Loader2, MoreHorizontal, Plus, Search } from "lucide-react";
+import { ChevronDown, CircleCheck, CircleOff, Loader2, MoreHorizontal, Plus, Search, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -39,23 +40,65 @@ function accessLabel(role: AppRole) {
   return role === "admin" ? "Administrator" : "Team Member";
 }
 
+const userWaves = {
+  total: {
+    back: "M0 46C78 46 128 22 206 30C286 38 338 16 400 24V120H0Z",
+    front: "M0 74C92 74 146 52 224 58C302 64 348 46 400 52V120H0Z",
+    backClass: "fill-sky-100 dark:fill-sky-900",
+    frontClass: "fill-sky-200 dark:fill-sky-700",
+  },
+  active: {
+    back: "M0 34C86 34 132 54 210 44C286 34 340 22 400 30V120H0Z",
+    front: "M0 64C96 64 150 82 228 70C306 58 352 50 400 56V120H0Z",
+    backClass: "fill-violet-100 dark:fill-violet-900",
+    frontClass: "fill-violet-200 dark:fill-violet-700",
+  },
+  inactive: {
+    back: "M0 42C72 28 138 24 214 38C292 52 346 36 400 26V120H0Z",
+    front: "M0 70C84 56 148 52 226 66C304 80 350 66 400 54V120H0Z",
+    backClass: "fill-amber-100 dark:fill-amber-900",
+    frontClass: "fill-amber-200 dark:fill-amber-700",
+  },
+} as const;
+
 function StatCard({
   label,
   value,
   onSelect,
+  icon: Icon,
+  tone,
 }: {
   label: string;
   value: number;
   onSelect: () => void;
+  icon: typeof Users;
+  tone: keyof typeof userWaves;
 }) {
+  const wave = userWaves[tone];
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="rounded-xl border bg-card p-4 text-left shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="relative flex min-h-[168px] flex-col overflow-hidden rounded-2xl border bg-card text-left shadow-sm outline-none transition hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
+      <div className="relative z-10 flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+        </div>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground">
+          <Icon className="size-4" />
+        </span>
+      </div>
+      <svg
+        viewBox="0 0 400 120"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] w-full"
+        aria-hidden
+      >
+        <path d={wave.back} className={wave.backClass} />
+        <path d={wave.front} className={wave.frontClass} />
+      </svg>
     </button>
   );
 }
@@ -145,6 +188,18 @@ function applySaved(data: PortalUserList, saved: PortalUserRow): PortalUserList 
     : others;
 
   return { ...data, users, total, active, inactive };
+}
+
+function removeDeleted(data: PortalUserList, id: string): PortalUserList {
+  const previous = data.users.find((user) => user.id === id);
+  if (!previous) return data;
+  return {
+    ...data,
+    users: data.users.filter((user) => user.id !== id),
+    total: Math.max(0, data.total - 1),
+    active: previous.status === "active" ? Math.max(0, data.active - 1) : data.active,
+    inactive: previous.status === "inactive" ? Math.max(0, data.inactive - 1) : data.inactive,
+  };
 }
 
 const inviteRoles = [
@@ -434,6 +489,60 @@ function DeactivateUserForm({
   );
 }
 
+function DeleteInviteForm({
+  user,
+  onDeleted,
+}: {
+  user: PortalUserRow;
+  onDeleted: () => void;
+}) {
+  const modal = useModal();
+  const [state, formAction, pending] = useActionState(deletePortalUser, emptyPortalUserMutationState);
+  const handled = useRef(state);
+  const { setBusy } = modal;
+
+  useEffect(() => {
+    setBusy(pending);
+  }, [pending, setBusy]);
+
+  useEffect(() => {
+    if (!state.deletedId || handled.current === state) return;
+    handled.current = state;
+    onDeleted();
+  }, [state, onDeleted]);
+
+  return (
+    <form
+      className="flex min-h-0 flex-auto flex-col"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (pending) return;
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => formAction(formData));
+      }}
+    >
+      <input type="hidden" name="id" value={user.id} />
+      <ModalBody>
+        <div className="grid gap-3 p-4">
+          {state.error ? <Notice tone="error">{state.error}</Notice> : null}
+          <p className="text-sm text-muted-foreground">
+            {displayName(user)} has not joined yet. Deleting removes the invitation and the account.
+          </p>
+        </div>
+      </ModalBody>
+      <ModalFooter className="px-4 py-2.5">
+        <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="destructive" disabled={pending}>
+          {pending ? <Loader2 className="animate-spin" /> : null}
+          {pending ? "Deleting…" : "Delete"}
+        </Button>
+      </ModalFooter>
+    </form>
+  );
+}
+
 function UserActions({
   user,
   isSelf,
@@ -441,6 +550,7 @@ function UserActions({
   onDeactivate,
   onActivated,
   onResent,
+  onDelete,
 }: {
   user: PortalUserRow;
   isSelf: boolean;
@@ -448,6 +558,7 @@ function UserActions({
   onDeactivate: () => void;
   onActivated: (user: PortalUserRow) => void;
   onResent: (user: PortalUserRow) => void;
+  onDelete: () => void;
 }) {
   const [state, formAction, pending] = useActionState(
     setPortalUserActive,
@@ -495,6 +606,11 @@ function UserActions({
               {resendPending ? "Sending…" : "Resend invitation"}
             </DropdownMenuItem>
           ) : null}
+          {user.status === "pending" && !isSelf ? (
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          ) : null}
           {user.status === "active" ? (
             <DropdownMenuItem disabled={isSelf} onSelect={onDeactivate}>
               Deactivate
@@ -536,6 +652,7 @@ export function AdminUsers({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<PortalUserRow | null>(null);
   const [deactivating, setDeactivating] = useState<PortalUserRow | null>(null);
+  const [deleting, setDeleting] = useState<PortalUserRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState(serverData.search);
   const [role, setRole] = useState(serverData.role);
@@ -602,6 +719,8 @@ export function AdminUsers({
         <StatCard
           label="Total users"
           value={data.total}
+          icon={Users}
+          tone="total"
           onSelect={() => {
             setStatus("all");
             pushFilters({ status: "all" });
@@ -610,6 +729,8 @@ export function AdminUsers({
         <StatCard
           label="Active"
           value={data.active}
+          icon={CircleCheck}
+          tone="active"
           onSelect={() => {
             setStatus("active");
             pushFilters({ status: "active" });
@@ -618,6 +739,8 @@ export function AdminUsers({
         <StatCard
           label="Inactive"
           value={data.inactive}
+          icon={CircleOff}
+          tone="inactive"
           onSelect={() => {
             setStatus("inactive");
             pushFilters({ status: "inactive" });
@@ -742,6 +865,7 @@ export function AdminUsers({
                           onDeactivate={() => setDeactivating(user)}
                           onActivated={(saved) => onSaved(saved, "User activated.")}
                           onResent={(saved) => onSaved(saved, "Invitation sent again.")}
+                          onDelete={() => setDeleting(user)}
                         />
                       </td>
                     </tr>
@@ -807,6 +931,29 @@ export function AdminUsers({
             key={deactivating.id}
             user={deactivating}
             onSaved={(user) => onSaved(user, "User deactivated.")}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        size="md"
+        title="Delete invitation"
+        description={
+          deleting ? `${displayName(deleting)} will be removed from the portal.` : undefined
+        }
+      >
+        {deleting ? (
+          <DeleteInviteForm
+            key={deleting.id}
+            user={deleting}
+            onDeleted={() => {
+              const id = deleting.id;
+              setData((current) => removeDeleted(current, id));
+              setDeleting(null);
+              setNotice("Invitation deleted.");
+            }}
           />
         ) : null}
       </Modal>

@@ -22,7 +22,7 @@ function AuditSkeleton() {
 
 function AuditFallback() {
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden">
       <div>
         <span className="block h-7 w-40 animate-pulse rounded bg-muted" />
         <span className="mt-3 block h-4 w-full max-w-md animate-pulse rounded bg-muted" />
@@ -39,7 +39,7 @@ async function AuditGate({ searchParams }: { searchParams: SearchParams }) {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden">
       <div className="shrink-0">
         <PageHeader
           title="Audit Log"

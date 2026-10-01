@@ -69,7 +69,7 @@ async function BeneficiariesContent({ searchParams }: { searchParams: SearchPara
 
 export default function BeneficiariesPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-hidden">
       <div className="shrink-0">
         <PageHeader
           title="Beneficiaries"

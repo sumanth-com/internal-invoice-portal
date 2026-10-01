@@ -2,7 +2,80 @@
 
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
+
+function useAnchoredMenu(open: boolean, rootRef: RefObject<HTMLDivElement | null>) {
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const [frame, setFrame] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const root = rootRef.current;
+    if (!root) return;
+    setHost(root.closest("dialog") ?? document.body);
+
+    function place() {
+      const current = rootRef.current;
+      if (!current) return;
+      const rect = current.getBoundingClientRect();
+      const top = rect.bottom + 4;
+      const left = rect.left;
+      const width = rect.width;
+      setFrame((current) =>
+        current && current.top === top && current.left === left && current.width === width
+          ? current
+          : { top, left, width },
+      );
+    }
+
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, rootRef]);
+
+  return { menuRef, host, frame };
+}
+
+function AnchoredMenu({
+  open,
+  host,
+  frame,
+  menuRef,
+  id,
+  className,
+  children,
+}: {
+  open: boolean;
+  host: HTMLElement | null;
+  frame: { top: number; left: number; width: number } | null;
+  menuRef: RefObject<HTMLUListElement | null>;
+  id: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  if (!open || !host || !frame) return null;
+  return createPortal(
+    <ul
+      ref={menuRef}
+      id={id}
+      role="listbox"
+      style={{ top: frame.top, left: frame.left, width: frame.width }}
+      className={cn(
+        "fixed z-50 max-h-56 overflow-auto rounded-md border bg-card py-1 text-sm shadow-md",
+        className,
+      )}
+    >
+      {children}
+    </ul>,
+    host,
+  );
+}
 
 export function SuggestField({
   id,
@@ -61,6 +134,7 @@ export function SuggestField({
           })
           .slice(0, 8);
   const visible = open && matches.length > 0;
+  const { menuRef, host, frame } = useAnchoredMenu(visible, rootRef);
 
   useEffect(() => {
     setActive(0);
@@ -69,18 +143,20 @@ export function SuggestField({
   useEffect(() => {
     if (!visible) return;
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [visible]);
+  }, [visible, menuRef]);
 
   useEffect(() => {
     if (!visible) return;
-    rootRef.current
+    menuRef.current
       ?.querySelector('[role="option"][aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, [active, visible]);
+  }, [active, visible, menuRef]);
 
   function choose(option: { value: string }) {
     onValue(option.value);
@@ -131,35 +207,33 @@ export function SuggestField({
         }}
         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
       />
-      {visible ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className={cn(
-            "absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 text-sm shadow-md",
-            menuClassName,
-          )}
-        >
-          {matches.map((option, index) => (
-            <li key={`${option.value}-${option.label}`} role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={index === active}
-                className={cn(
-                  "flex w-full px-3 py-2 text-left",
-                  index === active ? "bg-muted" : "hover:bg-muted/70",
-                )}
-                onMouseEnter={() => setActive(index)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => choose(option)}
-              >
-                {option.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <AnchoredMenu
+        open={visible}
+        host={host}
+        frame={frame}
+        menuRef={menuRef}
+        id={listId}
+        className={menuClassName}
+      >
+        {matches.map((option, index) => (
+          <li key={`${option.value}-${option.label}`} role="presentation">
+            <button
+              type="button"
+              role="option"
+              aria-selected={index === active}
+              className={cn(
+                "flex w-full px-3 py-2 text-left",
+                index === active ? "bg-muted" : "hover:bg-muted/70",
+              )}
+              onMouseEnter={() => setActive(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(option)}
+            >
+              {option.label}
+            </button>
+          </li>
+        ))}
+      </AnchoredMenu>
     </div>
   );
 }
@@ -171,6 +245,8 @@ export function ChoiceSelect({
   choices,
   label,
   disabled,
+  invalid,
+  display = "value",
   className,
   menuClassName,
 }: {
@@ -180,6 +256,8 @@ export function ChoiceSelect({
   choices: readonly { value: string; label: string }[];
   label: string;
   disabled?: boolean;
+  invalid?: boolean;
+  display?: "value" | "label";
   className?: string;
   menuClassName?: string;
 }) {
@@ -192,23 +270,26 @@ export function ChoiceSelect({
     choices.findIndex((choice) => choice.value === value),
   );
   const selected = choices.find((choice) => choice.value === value);
+  const { menuRef, host, frame } = useAnchoredMenu(open, rootRef);
 
   useEffect(() => {
     if (!open) return;
     setActive(selectedIndex);
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open, selectedIndex]);
+  }, [open, selectedIndex, menuRef]);
 
   useEffect(() => {
     if (!open) return;
-    rootRef.current
+    menuRef.current
       ?.querySelector('[role="option"][aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, [active, open]);
+  }, [active, open, menuRef]);
 
   function choose(next: string) {
     onValue(next);
@@ -245,41 +326,46 @@ export function ChoiceSelect({
             else choose(choices[active]?.value ?? value);
           }
         }}
-        className="flex h-9 w-full cursor-pointer items-center justify-between gap-1 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn(
+          "flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          invalid && "border-destructive",
+        )}
       >
-        <span className="truncate font-medium tabular-nums">{selected?.value ?? value}</span>
+        <span className={cn("truncate", display === "value" && "font-medium tabular-nums")}>
+          {display === "label" ? (selected?.label ?? value) : (selected?.value ?? value)}
+        </span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
       </button>
-      {open ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className={cn(
-            "absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-card py-1 text-sm shadow-md",
-            menuClassName,
-          )}
-        >
-          {choices.map((choice, index) => (
-            <li key={choice.value} role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={index === active}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 px-3 py-2 text-left",
-                  index === active ? "bg-muted" : "hover:bg-muted/70",
-                )}
-                onMouseEnter={() => setActive(index)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => choose(choice.value)}
-              >
-                <span>{choice.label}</span>
+      <AnchoredMenu
+        open={open}
+        host={host}
+        frame={frame}
+        menuRef={menuRef}
+        id={listId}
+        className={menuClassName}
+      >
+        {choices.map((choice, index) => (
+          <li key={choice.value} role="presentation">
+            <button
+              type="button"
+              role="option"
+              aria-selected={index === active}
+              className={cn(
+                "flex w-full items-center justify-between gap-3 px-3 py-2 text-left",
+                index === active ? "bg-muted" : "hover:bg-muted/70",
+              )}
+              onMouseEnter={() => setActive(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(choice.value)}
+            >
+              <span>{choice.label}</span>
+              {display === "value" ? (
                 <span className="font-medium tabular-nums text-muted-foreground">{choice.value}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </AnchoredMenu>
     </div>
   );
 }
