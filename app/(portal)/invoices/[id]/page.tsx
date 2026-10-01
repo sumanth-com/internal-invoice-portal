@@ -1,6 +1,7 @@
 import { InvoiceDetailView, InvoiceMissing } from "@/components/portal/invoice-detail";
 import { invoiceNotice } from "@/lib/invoice";
 import { loadInvoice } from "@/lib/invoices";
+import { loadInvoicePayments } from "@/lib/payments";
 import { getPortalUser } from "@/lib/portal-user";
 import { DetailSkeleton } from "@/components/portal/skeletons";
 import { Suspense } from "react";
@@ -25,11 +26,16 @@ async function InvoiceContent({
   const noticeValue = Array.isArray(query.notice) ? query.notice[0] : query.notice;
 
   try {
-    const [invoice, user] = await Promise.all([loadInvoice(id), getPortalUser()]);
+    const [invoice, user, payments] = await Promise.all([
+      loadInvoice(id),
+      getPortalUser(),
+      loadInvoicePayments(id),
+    ]);
     if (!invoice || !user) return <InvoiceMissing />;
     return (
       <InvoiceDetailView
         invoice={invoice}
+        payments={payments}
         isAdmin={user.role === "admin"}
         notice={invoiceNotice(noticeValue)}
       />

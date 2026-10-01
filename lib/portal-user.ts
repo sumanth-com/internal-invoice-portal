@@ -12,6 +12,11 @@ export const getPortalUser = cache(async function getPortalUser(): Promise<Porta
     redirect("/auth/login");
   }
 
+  const appMetadata = data.claims.app_metadata as { invitation_pending?: unknown } | undefined;
+  if (appMetadata?.invitation_pending === true) {
+    redirect("/auth/activate");
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, email, full_name, role, is_active")

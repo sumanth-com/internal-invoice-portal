@@ -209,7 +209,7 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
       `id, invoice_number, beneficiary_id, bank_account_id, status, invoice_date, due_date,
        bill_from, bill_to, currency, payment_terms, notes, gst_enabled, gst_rate,
        subtotal, gst_amount, total, amount_in_words, issued_at, paid_at, cancelled_at, created_at,
-       beneficiaries ( legal_name ),
+       beneficiaries ( legal_name, email ),
        bank_accounts ( id, account_holder_name, bank_name, account_number, ifsc_code, branch, is_default, is_active ),
        invoice_items ( id, position, hsn, description, quantity, rate, line_subtotal )`,
     )
@@ -255,6 +255,7 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
     invoiceNumber: data.invoice_number,
     beneficiaryId: data.beneficiary_id,
     beneficiaryName: beneficiary?.legal_name?.trim() || "—",
+    beneficiaryEmail: beneficiary?.email?.trim() || null,
     bankAccountId: data.bank_account_id,
     bank: bank ? mapBank(bank) : null,
     status,

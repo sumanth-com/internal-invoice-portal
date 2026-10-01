@@ -1,5 +1,6 @@
 "use client";
 
+import { InvoiceEmailButton } from "@/components/portal/invoice-email-dialog";
 import { usePortalModals } from "@/components/portal/portal-modals";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Loader2 } from "lucide-react";
@@ -13,9 +14,19 @@ function fileNameFrom(disposition: string | null, fallback: string) {
 export function InvoicePdfActions({
   id,
   number,
+  beneficiaryId,
+  beneficiaryName,
+  beneficiaryEmail,
+  total,
+  currency,
 }: {
   id: string;
   number: string;
+  beneficiaryId: string;
+  beneficiaryName: string;
+  beneficiaryEmail: string | null;
+  total: number;
+  currency: string;
 }) {
   const { notify } = usePortalModals();
   const [downloading, setDownloading] = useState(false);
@@ -69,6 +80,15 @@ export function InvoicePdfActions({
         {downloading ? <Loader2 className="animate-spin" /> : <Download />}
         {downloading ? "Preparing…" : "Download PDF"}
       </Button>
+      <InvoiceEmailButton
+        id={id}
+        number={number}
+        beneficiaryId={beneficiaryId}
+        beneficiaryName={beneficiaryName}
+        beneficiaryEmail={beneficiaryEmail}
+        total={total}
+        currency={currency}
+      />
     </div>
   );
 }

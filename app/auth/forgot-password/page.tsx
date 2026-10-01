@@ -1,7 +1,10 @@
-import { redirect } from "next/navigation";
-
-export const instant = false;
+import { AuthScreen } from "@/components/auth/auth-screen";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
 
 export default function Page() {
-  redirect("/auth/login");
+  return (
+    <AuthScreen>
+      <ForgotPasswordForm />
+    </AuthScreen>
+  );
 }

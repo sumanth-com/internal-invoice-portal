@@ -5,18 +5,20 @@ import {
   beneficiaryToRow,
   isBeneficiaryId,
   parseBeneficiaryForm,
+  type Beneficiary,
   type BeneficiaryFormState,
   type BeneficiaryMutationState,
 } from "@/lib/beneficiary";
 import {
   BENEFICIARY_COLUMNS,
   beneficiaryHasInvoices,
+  loadBeneficiary,
   mapBeneficiary,
 } from "@/lib/beneficiaries";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 function denied(message: string): BeneficiaryFormState {
   return { error: message, fieldErrors: {} };
@@ -152,4 +154,24 @@ export async function deleteBeneficiary(
   revalidatePath("/beneficiaries");
   revalidatePath("/dashboard");
   redirect("/beneficiaries?notice=deleted");
+}
+
+export async function fetchBeneficiary(
+  id: string,
+): Promise<{ ok: true; beneficiary: Beneficiary } | { ok: false; error: string }> {
+  try {
+    const user = await getPortalUser();
+    if (!user?.isActive) {
+      return { ok: false, error: "You do not have permission to edit this beneficiary." };
+    }
+    const beneficiary = await loadBeneficiary(id);
+    if (!beneficiary) return { ok: false, error: "This beneficiary was not found." };
+    return { ok: true, beneficiary };
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "This beneficiary could not be loaded.",
+    };
+  }
 }

@@ -2,7 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
-const PUBLIC_PATHS = new Set(["/auth/login", "/auth/confirm", "/auth/error"]);
+const PUBLIC_PATHS = new Set([
+  "/auth/login",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/confirm",
+  "/auth/error",
+]);
 
 function copySessionCookies(from: NextResponse, to: NextResponse) {
   from.cookies.getAll().forEach((cookie) => {
@@ -47,6 +53,21 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
   const { pathname } = request.nextUrl;
+  const invitationPending =
+    (user?.app_metadata as { invitation_pending?: unknown } | undefined)?.invitation_pending ===
+    true;
+  const invitationAllowed =
+    pathname === "/auth/activate" ||
+    pathname === "/auth/update-password" ||
+    pathname === "/auth/confirm" ||
+    pathname === "/auth/error";
+
+  if (user && invitationPending && !invitationAllowed) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/update-password";
+    url.search = "";
+    return copySessionCookies(supabaseResponse, NextResponse.redirect(url));
+  }
 
   if (user && (pathname === "/" || pathname === "/auth/login")) {
     const url = request.nextUrl.clone();

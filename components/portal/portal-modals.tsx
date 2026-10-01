@@ -16,6 +16,7 @@ import { UserPlus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -199,8 +200,20 @@ function Notices({ notices, dismiss }: { notices: Notice[]; dismiss: (id: number
   );
 }
 
-export function PortalModalsProvider({ children }: { children: ReactNode }) {
+function DismissModalsOnNavigate({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname();
+  const lastPathname = useRef(pathname);
+
+  useEffect(() => {
+    if (lastPathname.current === pathname) return;
+    lastPathname.current = pathname;
+    onNavigate();
+  }, [onNavigate, pathname]);
+
+  return null;
+}
+
+export function PortalModalsProvider({ children }: { children: ReactNode }) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceSession, setInvoiceSession] = useState(0);
   const [beneficiaryOpen, setBeneficiaryOpen] = useState(false);
@@ -210,14 +223,10 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const subscribers = useRef(new Set<BeneficiarySavedHandler>());
   const noticeId = useRef(0);
-  const lastPathname = useRef(pathname);
-
-  useEffect(() => {
-    if (lastPathname.current === pathname) return;
-    lastPathname.current = pathname;
+  const dismissOnNavigate = useCallback(() => {
     setInvoiceOpen(false);
     setBeneficiaryOpen(false);
-  }, [pathname]);
+  }, []);
 
   const notify = useCallback((message: string, tone: Notice["tone"] = "success") => {
     noticeId.current += 1;
@@ -270,6 +279,9 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
 
   return (
     <PortalModalsContext.Provider value={value}>
+      <Suspense fallback={null}>
+        <DismissModalsOnNavigate onNavigate={dismissOnNavigate} />
+      </Suspense>
       {children}
 
       <Modal

@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
@@ -9,6 +10,14 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/";
 
+  const code = searchParams.get("code");
+  if (code) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) redirect("/auth/error");
+    redirect("/auth/reset-password");
+  }
+
   if (token_hash && type) {
     const supabase = await createClient();
 
@@ -17,14 +26,25 @@ export async function GET(request: NextRequest) {
       token_hash,
     });
     if (!error) {
-      // redirect user to specified redirect URL or root of app
+      if (type === "invite") {
+        const admin = createAdminClient();
+        const { data: session } = await supabase.auth.getClaims();
+        const userId = session?.claims?.sub;
+        if (admin && userId) {
+          await admin.auth.admin.updateUserById(userId, {
+            app_metadata: { invitation_pending: true },
+          });
+          await supabase.auth.refreshSession();
+        }
+        redirect("/auth/activate");
+      }
+      if (type === "recovery") redirect("/auth/reset-password");
       redirect(next);
     } else {
       // redirect the user to an error page with some instructions
-      redirect(`/auth/error?error=${error?.message}`);
+      redirect("/auth/error");
     }
   }
 
-  // redirect the user to an error page with some instructions
-  redirect(`/auth/error?error=No token hash or type`);
+  redirect("/auth/error");
 }

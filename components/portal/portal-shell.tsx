@@ -2,13 +2,16 @@
 
 import { cn } from "@/lib/utils";
 import type { PortalUser } from "@/lib/portal";
-import { PortalModalsProvider } from "@/components/portal/portal-modals";
+import { PortalLogo } from "@/components/brand-logo";
 import { UserMenu } from "@/components/portal/user-menu";
 import { Button } from "@/components/ui/button";
 import {
+  Banknote,
+  BarChart3,
   FileText,
   LayoutDashboard,
   Menu,
+  ScrollText,
   Settings,
   Shield,
   Users,
@@ -16,13 +19,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/beneficiaries", label: "Beneficiaries", icon: Users },
   { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/payments", label: "Payments", icon: Banknote },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
+  {
+    href: "/audit",
+    label: "Audit Log",
+    icon: ScrollText,
+    adminOnly: true,
+  },
   {
     href: "/admin",
     label: "Admin Management",
@@ -48,7 +59,7 @@ function SidebarNav({
   );
 
   return (
-    <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
+    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
@@ -75,81 +86,93 @@ function SidebarNav({
 function Brand() {
   return (
     <div className="flex h-14 items-center gap-3 border-b px-4">
-      <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <FileText className="size-4" />
-      </span>
-      <span>
-        <span className="block text-sm font-semibold leading-none">
-          Invoice Portal
-        </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
-          Internal finance
-        </span>
+      <PortalLogo size={32} priority />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold leading-none">Invoice Portal</span>
+        <span className="mt-1 block truncate text-xs text-muted-foreground">Internal finance</span>
       </span>
     </div>
   );
 }
 
-export function PortalShell({
-  user,
-  children,
-}: {
-  user: PortalUser;
-  children: React.ReactNode;
-}) {
-  const pathname = usePathname();
+const NavContext = createContext<{
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean | ((value: boolean) => boolean)) => void;
+} | null>(null);
+
+export function PortalNavProvider({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const current = navigation.find((item) => isActive(pathname, item.href));
+  return <NavContext.Provider value={{ mobileOpen, setMobileOpen }}>{children}</NavContext.Provider>;
+}
+
+export function CloseMobileNavOnNavigate() {
+  const pathname = usePathname();
+  const { setMobileOpen } = usePortalNav();
 
   useEffect(() => {
     setMobileOpen(false);
-  }, [pathname]);
+  }, [pathname, setMobileOpen]);
+
+  return null;
+}
+
+function usePortalNav() {
+  const value = useContext(NavContext);
+  if (!value) throw new Error("Portal navigation is unavailable.");
+  return value;
+}
+
+export function DesktopSidebar({ user }: { user: PortalUser }) {
+  return (
+    <aside className="hidden h-full w-64 shrink-0 flex-col overflow-hidden border-r bg-card lg:flex">
+      <Brand />
+      <SidebarNav user={user} />
+    </aside>
+  );
+}
+
+export function MobileDrawer({ user }: { user: PortalUser }) {
+  const { mobileOpen, setMobileOpen } = usePortalNav();
+  if (!mobileOpen) return null;
 
   return (
-    <div className="flex min-h-svh bg-muted/40">
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
+    <div className="fixed inset-0 z-40 lg:hidden">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40"
+        aria-label="Close navigation"
+        onClick={() => setMobileOpen(false)}
+      />
+      <aside className="relative flex h-full w-64 flex-col overflow-hidden bg-card shadow-lg">
         <Brand />
-        <SidebarNav user={user} />
+        <SidebarNav user={user} onNavigate={() => setMobileOpen(false)} />
       </aside>
-
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="relative flex h-full w-64 flex-col bg-card shadow-lg">
-            <Brand />
-            <SidebarNav user={user} onNavigate={() => setMobileOpen(false)} />
-          </aside>
-        </div>
-      ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b bg-card px-4">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
-              onClick={() => setMobileOpen((open) => !open)}
-            >
-              {mobileOpen ? <X /> : <Menu />}
-            </Button>
-            <p className="truncate text-sm font-medium">
-              {current?.label ?? "Internal Invoice Portal"}
-            </p>
-          </div>
-          <UserMenu user={user} />
-        </header>
-        <main className="flex-1 p-4 md:p-6">
-          <PortalModalsProvider>{children}</PortalModalsProvider>
-        </main>
-      </div>
     </div>
+  );
+}
+
+export function PortalHeader({ user }: { user: PortalUser }) {
+  const pathname = usePathname();
+  const { mobileOpen, setMobileOpen } = usePortalNav();
+  const current = navigation.find((item) => isActive(pathname, item.href));
+
+  return (
+    <header className="z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-card px-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="lg:hidden"
+          aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+          onClick={() => setMobileOpen((open) => !open)}
+        >
+          {mobileOpen ? <X /> : <Menu />}
+        </Button>
+        <PortalLogo size={32} className="lg:hidden" />
+        <p className="truncate text-sm font-medium">{current?.label ?? "Internal Invoice Portal"}</p>
+      </div>
+      <UserMenu user={user} />
+    </header>
   );
 }

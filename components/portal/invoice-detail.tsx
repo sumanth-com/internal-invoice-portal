@@ -4,6 +4,7 @@ import {
   IssueInvoiceButton,
 } from "@/components/portal/invoice-actions";
 import { InvoiceNotice } from "@/components/portal/invoice-notice";
+import { InvoicePayments } from "@/components/portal/invoice-payments";
 import { InvoicePdfActions } from "@/components/portal/invoice-pdf-actions";
 import { InvoicePreview } from "@/components/portal/invoice-preview";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import {
   type InvoiceDetail as InvoiceDetailData,
   type InvoiceStatus,
 } from "@/lib/invoice";
+import type { PaymentRecord } from "@/lib/payment";
 import Link from "next/link";
 
 function statusVariant(status: InvoiceStatus) {
@@ -44,10 +46,12 @@ export function InvoiceMissing() {
 
 export function InvoiceDetailView({
   invoice,
+  payments,
   isAdmin,
   notice,
 }: {
   invoice: InvoiceDetailData;
+  payments: PaymentRecord[];
   isAdmin: boolean;
   notice: "saved" | "issued" | "cancelled" | "deleted" | null;
 }) {
@@ -86,7 +90,15 @@ export function InvoiceDetailView({
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           {invoice.status !== "draft" ? (
-            <InvoicePdfActions id={invoice.id} number={invoice.invoiceNumber} />
+            <InvoicePdfActions
+              id={invoice.id}
+              number={invoice.invoiceNumber}
+              beneficiaryId={invoice.beneficiaryId}
+              beneficiaryName={invoice.beneficiaryName}
+              beneficiaryEmail={invoice.beneficiaryEmail}
+              total={invoice.total}
+              currency={invoice.currency}
+            />
           ) : null}
           {invoice.status === "draft" ? (
             <Button asChild>
@@ -132,12 +144,17 @@ export function InvoiceDetailView({
         </div>
       ) : null}
 
-      {invoice.status === "issued" ? (
-        <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
-          This invoice stays issued until recorded payments cover the total.
-          Payment recording is separate from this screen.
-        </p>
-      ) : null}
+      <InvoicePayments
+        invoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          beneficiaryName: invoice.beneficiaryName,
+          currency: invoice.currency,
+          total: invoice.total,
+          status: invoice.status,
+        }}
+        payments={payments}
+      />
 
       <InvoicePreview invoice={invoice} />
     </div>

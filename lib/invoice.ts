@@ -112,6 +112,7 @@ export type InvoiceDetail = {
   invoiceNumber: string;
   beneficiaryId: string;
   beneficiaryName: string;
+  beneficiaryEmail: string | null;
   bankAccountId: string | null;
   bank: BankAccountOption | null;
   status: InvoiceStatus;

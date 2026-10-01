@@ -67,6 +67,19 @@ export function prefetchInvoiceFormOptions() {
   void loadInvoiceFormOptions();
 }
 
+export function invalidateInvoiceFormOptions() {
+  loadedAt = 0;
+  if (!snapshot.data) return;
+  if (inflight) {
+    void inflight.finally(() => {
+      loadedAt = 0;
+      void loadInvoiceFormOptions({ force: true });
+    });
+    return;
+  }
+  void loadInvoiceFormOptions({ force: true });
+}
+
 export function upsertInvoiceBeneficiary(beneficiary: Beneficiary) {
   if (!snapshot.data) return;
   const others = snapshot.data.beneficiaries.filter((item) => item.id !== beneficiary.id);

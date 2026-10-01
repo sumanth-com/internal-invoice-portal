@@ -9,7 +9,7 @@ export type PortalUser = {
 };
 
 export function roleLabel(role: AppRole) {
-  return role === "admin" ? "Admin" : "Internal User";
+  return role === "admin" ? "Administrator" : "Team Member";
 }
 
 export function displayName(user: Pick<PortalUser, "fullName" | "email">) {

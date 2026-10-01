@@ -69,6 +69,27 @@ export function DetailSkeleton({ label }: { label: string }) {
   );
 }
 
+export function SettingsSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      {Array.from({ length: 5 }, (_, index) => (
+        <section key={index} className="rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+          <Bar className="h-5 w-40" />
+          <Bar className="mt-2 h-4 w-72 max-w-full" />
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Bar className="h-9" />
+            <Bar className="h-9" />
+            <Bar className="h-9 sm:col-span-2" />
+          </div>
+        </section>
+      ))}
+      <p className="sr-only" role="status">
+        Loading settings…
+      </p>
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   description,
