@@ -19,7 +19,7 @@ import {
 } from "@/lib/audit";
 import { currentMonthRange, datesAreCurrentMonth, formatInvoiceDate, invoiceToday } from "@/lib/invoice";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Eye, Search } from "lucide-react";
+import { Activity, CalendarDays, ChevronDown, Eye, FileText, IndianRupee, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useState, type ReactNode } from "react";
@@ -39,26 +39,74 @@ function selectedEventCard(filters: AuditFilters): EventCard | null {
   return null;
 }
 
+const eventWaves = {
+  total: {
+    back: "M0 46C78 46 128 22 206 30C286 38 338 16 400 24V120H0Z",
+    front: "M0 74C92 74 146 52 224 58C302 64 348 46 400 52V120H0Z",
+    backClass: "fill-sky-100 dark:fill-sky-900",
+    frontClass: "fill-sky-200 dark:fill-sky-700",
+  },
+  today: {
+    back: "M0 34C86 34 132 54 210 44C286 34 340 22 400 30V120H0Z",
+    front: "M0 64C96 64 150 82 228 70C306 58 352 50 400 56V120H0Z",
+    backClass: "fill-violet-100 dark:fill-violet-900",
+    frontClass: "fill-violet-200 dark:fill-violet-700",
+  },
+  invoice: {
+    back: "M0 42C72 28 138 24 214 38C292 52 346 36 400 26V120H0Z",
+    front: "M0 70C84 56 148 52 226 66C304 80 350 66 400 54V120H0Z",
+    backClass: "fill-amber-100 dark:fill-amber-900",
+    frontClass: "fill-amber-200 dark:fill-amber-700",
+  },
+  payment: {
+    back: "M0 38C70 50 140 18 210 32C280 46 340 28 400 36V120H0Z",
+    front: "M0 68C80 80 150 48 220 62C290 76 345 58 400 64V120H0Z",
+    backClass: "fill-emerald-100 dark:fill-emerald-900",
+    frontClass: "fill-emerald-200 dark:fill-emerald-700",
+  },
+} as const;
+
 function StatCard({
   label,
   value,
   selected,
   onSelect,
+  icon: Icon,
+  tone,
 }: {
   label: string;
   value: number;
   selected: boolean;
   onSelect: () => void;
+  icon: typeof Activity;
+  tone: keyof typeof eventWaves;
 }) {
+  const wave = eventWaves[tone];
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onSelect}
-      className="rounded-xl border bg-card p-4 text-left shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="relative flex min-h-[168px] flex-col overflow-hidden rounded-2xl border bg-card text-left shadow-sm outline-none transition hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
+      <div className="relative z-10 flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+        </div>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground">
+          <Icon className="size-4" />
+        </span>
+      </div>
+      <svg
+        viewBox="0 0 400 120"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[46%] w-full"
+        aria-hidden
+      >
+        <path d={wave.back} className={wave.backClass} />
+        <path d={wave.front} className={wave.frontClass} />
+      </svg>
     </button>
   );
 }
@@ -288,24 +336,32 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
           value={data.total}
           selected={activeCard === "total"}
           onSelect={() => selectCard("total")}
+          icon={Activity}
+          tone="total"
         />
         <StatCard
           label="Today"
           value={data.today}
           selected={activeCard === "today"}
           onSelect={() => selectCard("today")}
+          icon={CalendarDays}
+          tone="today"
         />
         <StatCard
           label="Invoice Events"
           value={data.invoiceEvents}
           selected={activeCard === "invoice"}
           onSelect={() => selectCard("invoice")}
+          icon={FileText}
+          tone="invoice"
         />
         <StatCard
           label="Payment Events"
           value={data.paymentEvents}
           selected={activeCard === "payment"}
           onSelect={() => selectCard("payment")}
+          icon={IndianRupee}
+          tone="payment"
         />
       </div>
 

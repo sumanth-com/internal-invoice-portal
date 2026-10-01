@@ -15,14 +15,17 @@ export function BrandLogo({
   className?: string;
   priority?: boolean;
 }) {
+  const width = Math.round(markRatio * height);
+
   return (
     <Image
       src={brandMark}
       alt="iFranchise"
-      width={Math.round(markRatio * height)}
+      width={width}
       height={height}
       priority={priority}
-      className={cn("brightness-0 dark:invert", className)}
+      className={cn("h-auto w-auto shrink-0 object-contain brightness-0 dark:invert", className)}
+      style={{ width, height }}
     />
   );
 }
@@ -46,7 +49,17 @@ export function PortalLogo({
       width={width}
       height={height}
       priority={priority}
-      className={cn("shrink-0 rounded-md", className)}
+      className={cn("h-auto w-auto shrink-0 object-contain", className)}
+      style={{ width, height }}
     />
+  );
+}
+
+export function PortalBrand({ priority = false }: { priority?: boolean }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <PortalLogo size={40} priority={priority} className="rounded-lg" />
+      <BrandLogo height={40} priority={priority} />
+    </span>
   );
 }

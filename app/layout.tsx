@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import icon from "@/assets/Logo.png";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -14,6 +15,10 @@ export const metadata: Metadata = {
     template: "%s · Internal Invoice Portal",
   },
   description: "Internal invoice portal",
+  icons: {
+    icon: [{ url: icon.src, type: "image/png" }],
+    apple: [{ url: icon.src, type: "image/png" }],
+  },
 };
 
 const geistSans = Geist({

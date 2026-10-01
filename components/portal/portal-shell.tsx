@@ -1,6 +1,6 @@
 "use client";
 
-import { PortalLogo } from "@/components/brand-logo";
+import { PortalBrand } from "@/components/brand-logo";
 import { UserMenu } from "@/components/portal/user-menu";
 import { Button } from "@/components/ui/button";
 import type { PortalUser } from "@/lib/portal";
@@ -112,9 +112,8 @@ export function CloseMobileNavOnNavigate() {
 
 function Brand() {
   return (
-    <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
-      <PortalLogo size={28} priority />
-      <span className="text-sm font-semibold tracking-tight">Invoice Portal</span>
+    <Link href="/dashboard" aria-label="Invoice Portal" className="flex shrink-0 items-center">
+      <PortalBrand priority />
     </Link>
   );
 }

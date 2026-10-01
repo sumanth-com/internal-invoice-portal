@@ -1,10 +1,12 @@
 "use client";
 
+import { PortalLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,9 +18,13 @@ function emailError(value: string) {
   return null;
 }
 
+const fieldClass =
+  "h-11 rounded-lg border-neutral-200 bg-white px-3.5 text-neutral-950 shadow-none placeholder:text-neutral-400 focus-visible:border-[hsl(262,83%,58%)] focus-visible:ring-[hsl(262,83%,58%)]";
+
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -57,47 +63,76 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="grid gap-4" noValidate>
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Use your Internal Invoice Portal account.
-        </p>
+      <div className="mb-3 text-center">
+        <div className="flex justify-center">
+          <PortalLogo size={44} priority />
+        </div>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-neutral-950">Welcome back</h1>
+        <p className="mt-2 text-sm text-neutral-500">Sign in to your account</p>
       </div>
       {error ? (
-        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600">
           {error}
         </p>
       ) : null}
-      <div className="grid gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          aria-invalid={fieldErrors.email ? true : undefined}
-        />
-        {fieldErrors.email ? <p className="text-sm text-destructive">{fieldErrors.email}</p> : null}
-      </div>
-      <div className="grid gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="password">Password</Label>
-          <Link href="/auth/forgot-password" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-            Forgot password?
-          </Link>
+      <div className="grid gap-4 text-left">
+        <div className="grid gap-2">
+          <Label htmlFor="email" className="text-sm font-medium text-neutral-800">
+            Email
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={fieldErrors.email ? true : undefined}
+            className={cn(fieldClass, fieldErrors.email && "border-red-400 focus-visible:border-red-500 focus-visible:ring-red-500")}
+          />
+          {fieldErrors.email ? <p className="text-sm text-red-600">{fieldErrors.email}</p> : null}
         </div>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          aria-invalid={fieldErrors.password ? true : undefined}
-        />
-        {fieldErrors.password ? <p className="text-sm text-destructive">{fieldErrors.password}</p> : null}
+        <div className="grid gap-2">
+          <Label htmlFor="password" className="text-sm font-medium text-neutral-800">
+            Password
+          </Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={fieldErrors.password ? true : undefined}
+              className={cn(
+                fieldClass,
+                "pr-11",
+                fieldErrors.password && "border-red-400 focus-visible:border-red-500 focus-visible:ring-red-500",
+              )}
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-700"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+          {fieldErrors.password ? <p className="text-sm text-red-600">{fieldErrors.password}</p> : null}
+          <div className="flex justify-end pt-1">
+            <Link href="/auth/forgot-password" className="text-sm font-medium text-neutral-900 hover:text-neutral-600">
+              Forgot password
+            </Link>
+          </div>
+        </div>
       </div>
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button
+        type="submit"
+        className="mt-1 h-11 w-full rounded-lg bg-[hsl(262,83%,58%)] text-white shadow-none hover:bg-[hsl(262,83%,52%)]"
+        disabled={isLoading}
+      >
         {isLoading ? <Loader2 className="animate-spin" /> : null}
         {isLoading ? "Signing in…" : "Sign in"}
       </Button>

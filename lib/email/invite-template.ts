@@ -60,7 +60,7 @@ export function renderInviteEmail(details: InviteEmailDetails): InviteEmailConte
           <table role="presentation" class="email-card" width="100%" cellpadding="0" cellspacing="0" align="center" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #e6e3ee;border-radius:20px;">
             <tr>
               <td class="email-pad" align="center" style="padding:36px 40px 32px;text-align:center;">
-                <img src="cid:${INVITE_EMAIL_LOGO_CID}" alt="iFranchise" width="56" height="54" style="display:block;margin:0 auto;width:56px;height:54px;border:0;outline:none;text-decoration:none;border-radius:10px;" />
+                <img src="cid:${INVITE_EMAIL_LOGO_CID}" alt="iFranchise" width="56" height="54" style="display:block;margin:0 auto;width:56px;height:54px;border:0;outline:none;text-decoration:none;" />
                 <p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;font-weight:600;color:#2f0da3;text-align:center;">iFranchise</p>
                 <h1 style="margin:28px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:1.25;font-weight:700;color:#1c1733;text-align:center;">You're invited to iFranchise</h1>
                 <p style="margin:16px auto 0;max-width:420px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#3f3a4d;text-align:center;">Hello ${escapeHtml(recipientName)},</p>

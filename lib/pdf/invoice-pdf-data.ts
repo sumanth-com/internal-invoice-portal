@@ -4,8 +4,11 @@ import type {
   InvoicePdfLogo,
 } from "@/lib/pdf/invoice-document";
 import { createClient } from "@/lib/supabase/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 const LOGO_BUCKET = "company-logos";
+const MARK_PATH = path.join(process.cwd(), "assets", "Logo.png");
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const LOGO_TIMEOUT_MS = 5000;
 
@@ -58,13 +61,21 @@ async function loadLogo(supabase: SupabaseClient, reference: string | null) {
   }
 }
 
+async function defaultMark(): Promise<InvoicePdfLogo | null> {
+  try {
+    return { data: await readFile(MARK_PATH), format: "png" };
+  } catch {
+    return null;
+  }
+}
+
 async function loadCompanyBranding(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("company_settings")
     .select("logo_url, website")
     .maybeSingle();
   if (error) throw error;
-  const logo = await loadLogo(supabase, data?.logo_url ?? null);
+  const logo = (await loadLogo(supabase, data?.logo_url ?? null)) ?? (await defaultMark());
   return { logo, website: data?.website?.trim() || null };
 }
 

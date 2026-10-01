@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   accent: { position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: INK },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   brand: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logo: { width: 28, height: 28 },
+  logo: { width: 29, height: 28, objectFit: "contain" },
   title: { fontSize: 16, fontWeight: 700 },
   meta: { marginTop: 2, color: MUTED },
   summary: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },

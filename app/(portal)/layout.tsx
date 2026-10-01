@@ -1,4 +1,4 @@
-import { PortalLogo } from "@/components/brand-logo";
+import { PortalBrand } from "@/components/brand-logo";
 import { LogoutButton } from "@/components/logout-button";
 import { PortalModalsProvider } from "@/components/portal/portal-modals";
 import { CloseMobileNavOnNavigate, PortalNavProvider, PortalTopNav } from "@/components/portal/portal-shell";
@@ -8,10 +8,7 @@ import { Suspense } from "react";
 function HeaderFallback() {
   return (
     <header className="flex h-[72px] shrink-0 items-center justify-between border-b bg-card px-4 md:px-6">
-      <span className="flex items-center gap-2.5">
-        <PortalLogo size={28} priority />
-        <span className="h-4 w-28 animate-pulse rounded bg-muted" />
-      </span>
+      <PortalBrand priority />
       <span className="size-8 animate-pulse rounded-full bg-muted" />
     </header>
   );
