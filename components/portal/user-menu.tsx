@@ -11,10 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Loader2, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
 const themes = [
@@ -24,12 +23,10 @@ const themes = [
 ] as const;
 
 export function UserMenu({ user }: { user: PortalUser }) {
-  const router = useRouter();
   const name = displayName(user);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleId = useId();
 
@@ -38,18 +35,16 @@ export function UserMenu({ user }: { user: PortalUser }) {
   }, []);
 
   async function signOut() {
-    if (pending) return;
-    setPending(true);
+    setConfirming(false);
     setError(null);
     const supabase = createClient();
-    const { error: signOutError } = await supabase.auth.signOut();
+    const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
     if (signOutError) {
-      setPending(false);
       setError("Sign out could not be completed. Try again.");
+      setConfirming(true);
       return;
     }
-    router.push("/auth/login");
-    router.refresh();
+    window.location.replace("/auth/login");
   }
 
   return (
@@ -126,7 +121,7 @@ export function UserMenu({ user }: { user: PortalUser }) {
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !pending) setConfirming(false);
+            if (event.target === event.currentTarget) setConfirming(false);
           }}
         >
           <div
@@ -144,12 +139,11 @@ export function UserMenu({ user }: { user: PortalUser }) {
               </p>
             ) : null}
             <div className="mt-5 flex justify-end gap-2">
-              <Button type="button" variant="outline" disabled={pending} onClick={() => setConfirming(false)}>
+              <Button type="button" variant="outline" onClick={() => setConfirming(false)}>
                 Cancel
               </Button>
-              <Button type="button" disabled={pending} onClick={() => void signOut()}>
-                {pending ? <Loader2 className="animate-spin" /> : null}
-                {pending ? "Signing out…" : "Sign out"}
+              <Button type="button" onClick={() => void signOut()}>
+                Sign out
               </Button>
             </div>
           </div>

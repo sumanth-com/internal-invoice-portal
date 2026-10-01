@@ -251,23 +251,25 @@ function AddUserForm({ onSaved }: { onSaved: (user: PortalUserRow) => void }) {
           <p className="text-sm text-muted-foreground">
             An invitation email is sent through the existing sign-in flow. The role below is the access they receive.
           </p>
-          <div className="grid gap-2">
-            <Label htmlFor="full_name">
-              Name<span className="text-destructive"> *</span>
-            </Label>
-            <Input id="full_name" name="full_name" maxLength={120} required autoComplete="name" data-autofocus />
-            {state.fieldErrors.full_name ? (
-              <p className="text-sm text-destructive">{state.fieldErrors.full_name}</p>
-            ) : null}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="email">
-              Email<span className="text-destructive"> *</span>
-            </Label>
-            <Input id="email" name="email" type="email" maxLength={160} required autoComplete="email" />
-            {state.fieldErrors.email ? (
-              <p className="text-sm text-destructive">{state.fieldErrors.email}</p>
-            ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="full_name">
+                Name<span className="text-destructive"> *</span>
+              </Label>
+              <Input id="full_name" name="full_name" maxLength={120} required autoComplete="name" data-autofocus />
+              {state.fieldErrors.full_name ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.full_name}</p>
+              ) : null}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">
+                Email<span className="text-destructive"> *</span>
+              </Label>
+              <Input id="email" name="email" type="email" maxLength={160} required autoComplete="email" />
+              {state.fieldErrors.email ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.email}</p>
+              ) : null}
+            </div>
           </div>
           <fieldset className="grid gap-2">
             <legend className="text-sm font-medium">Role / Portal access</legend>

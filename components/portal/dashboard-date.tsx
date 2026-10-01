@@ -39,8 +39,8 @@ export function DashboardDateCard() {
   const clock = portalClock(now);
 
   return (
-    <div className="flex w-64 shrink-0 items-center gap-4 rounded-2xl border bg-card px-3.5 py-2.5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <div className="w-12 overflow-hidden rounded-lg border bg-card text-center shadow-sm dark:border-white/10 dark:bg-neutral-950">
+    <div className="flex w-64 shrink-0 items-center gap-4 rounded-2xl border bg-card px-3.5 py-2.5 shadow-sm">
+      <div className="w-12 overflow-hidden rounded-lg border bg-card text-center shadow-sm dark:bg-[hsl(224,48%,8%)]">
         <div className="bg-primary py-1 text-[10px] font-semibold tracking-[0.14em] text-primary-foreground">
           {clock.month}
         </div>

@@ -24,6 +24,9 @@ import { startTransition, useEffect, useState } from "react";
 const panelActionClass =
   "size-9 rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white";
 
+const detailPanelClass =
+  "bg-primary dark:bg-[linear-gradient(165deg,hsl(262,70%,46%)_0%,hsl(250,48%,32%)_55%,hsl(228,46%,24%)_100%)]";
+
 const panelTipClass =
   "pointer-events-none absolute top-full z-20 mt-1.5 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background opacity-0 shadow-sm transition-opacity group-hover/tip:opacity-100 group-focus-within/tip:opacity-100";
 
@@ -229,7 +232,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
         <p className="text-sm text-muted-foreground">No beneficiaries yet.</p>
       ) : null}
 
-      <section className="grid min-h-[28rem] min-w-0 flex-1 overflow-hidden rounded-[28px] bg-neutral-950 shadow-sm lg:min-h-0 lg:grid-cols-[minmax(22rem,34rem)_minmax(0,1fr)]">
+      <section className="grid min-h-[28rem] min-w-0 flex-1 overflow-hidden rounded-[28px] bg-neutral-950 shadow-sm lg:min-h-0 lg:grid-cols-[minmax(22rem,34rem)_minmax(0,1fr)] dark:bg-[hsl(223,50%,8%)] dark:shadow-[0_0_0_1px_hsl(220_28%_20%),0_18px_40px_-24px_hsl(224_80%_2%/0.85)]">
         <div className="flex min-h-0 min-w-0 flex-col text-white">
           <div className="flex items-center justify-between gap-3 px-4 py-4">
             <h2 className="text-sm font-semibold">
@@ -357,7 +360,7 @@ function InvoicePanel({
 
   if (!invoice) {
     return (
-      <div className="flex h-full min-h-48 min-w-0 items-center justify-center bg-primary px-6 text-center text-sm text-primary-foreground/70">
+      <div className={cn("flex h-full min-h-48 min-w-0 items-center justify-center px-6 text-center text-sm text-primary-foreground/70", detailPanelClass)}>
         {message}
       </div>
     );
@@ -397,7 +400,7 @@ function InvoicePanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-y-auto bg-primary text-primary-foreground">
+    <div className={cn("flex h-full min-h-0 min-w-0 flex-col overflow-y-auto text-primary-foreground", detailPanelClass)}>
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">

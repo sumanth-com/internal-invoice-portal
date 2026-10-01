@@ -19,7 +19,7 @@ function emailError(value: string) {
 }
 
 const fieldClass =
-  "h-11 rounded-lg border-neutral-200 bg-white px-3.5 text-neutral-950 shadow-none placeholder:text-neutral-400 focus-visible:border-[hsl(262,83%,58%)] focus-visible:ring-[hsl(262,83%,58%)]";
+  "h-11 rounded-lg border-neutral-200 bg-white px-3.5 text-neutral-950 shadow-none placeholder:text-neutral-400 focus-visible:border-[hsl(262,83%,58%)] focus-visible:ring-[hsl(262,83%,58%)] dark:border-[hsl(220,28%,22%)] dark:bg-[hsl(223,46%,11%)] dark:text-white dark:placeholder:text-[hsl(217,16%,62%)]";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -67,17 +67,17 @@ export function LoginForm() {
         <div className="flex justify-center">
           <PortalLogo size={44} priority />
         </div>
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-neutral-950">Welcome back</h1>
-        <p className="mt-2 text-sm text-neutral-500">Sign in to your account</p>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-neutral-950 dark:text-white">Welcome back</h1>
+        <p className="mt-2 text-sm text-neutral-500 dark:text-[hsl(217,18%,70%)]">Sign in to your account</p>
       </div>
       {error ? (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600">
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
           {error}
         </p>
       ) : null}
       <div className="grid gap-4 text-left">
         <div className="grid gap-2">
-          <Label htmlFor="email" className="text-sm font-medium text-neutral-800">
+          <Label htmlFor="email" className="text-sm font-medium text-neutral-800 dark:text-[hsl(210,20%,92%)]">
             Email
           </Label>
           <Input
@@ -93,7 +93,7 @@ export function LoginForm() {
           {fieldErrors.email ? <p className="text-sm text-red-600">{fieldErrors.email}</p> : null}
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="password" className="text-sm font-medium text-neutral-800">
+          <Label htmlFor="password" className="text-sm font-medium text-neutral-800 dark:text-[hsl(210,20%,92%)]">
             Password
           </Label>
           <div className="relative">
@@ -113,7 +113,7 @@ export function LoginForm() {
             />
             <button
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-700"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
               aria-label={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword((current) => !current)}
             >
@@ -122,7 +122,7 @@ export function LoginForm() {
           </div>
           {fieldErrors.password ? <p className="text-sm text-red-600">{fieldErrors.password}</p> : null}
           <div className="flex justify-end pt-1">
-            <Link href="/auth/forgot-password" className="text-sm font-medium text-neutral-900 hover:text-neutral-600">
+            <Link href="/auth/forgot-password" className="text-sm font-medium text-neutral-900 hover:text-neutral-600 dark:text-[hsl(210,20%,92%)] dark:hover:text-white">
               Forgot password
             </Link>
           </div>

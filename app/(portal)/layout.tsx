@@ -59,7 +59,7 @@ export default function PortalLayout({
       <Suspense fallback={<HeaderFallback />}>
         <SignedInNav />
       </Suspense>
-      <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-muted/30 p-4 md:p-6">
+      <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-muted/30 p-4 md:p-6 dark:bg-transparent">
         <PortalModalsProvider>{children}</PortalModalsProvider>
       </main>
       <Suspense fallback={null}>

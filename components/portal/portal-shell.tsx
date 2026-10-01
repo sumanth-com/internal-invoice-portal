@@ -64,7 +64,7 @@ function mobileLinkClass(active: boolean) {
     "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm transition-colors duration-150",
     active
       ? "bg-primary font-medium text-white"
-      : "text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white",
+      : "text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:text-white",
   );
 }
 
@@ -72,7 +72,7 @@ const headerIconClass =
   "inline-flex size-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors duration-150";
 
 const headerIconHover =
-  "hover:bg-accent dark:hover:border-white/20 dark:hover:bg-white/10 dark:hover:text-white";
+  "hover:bg-accent dark:hover:border-[hsl(262,40%,42%)] dark:hover:text-white";
 
 function headerIconState(active: boolean) {
   return cn(
@@ -161,7 +161,7 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
         <Brand />
         <div className="pointer-events-none absolute inset-x-0 hidden justify-center xl:flex">
           <nav
-            className="pointer-events-auto flex items-center gap-0.5 rounded-full bg-neutral-900 p-1 shadow-sm"
+            className="pointer-events-auto flex items-center gap-0.5 rounded-full bg-neutral-900 p-1 shadow-sm dark:bg-[hsl(223,42%,14%)] dark:shadow-[0_0_0_1px_hsl(220_28%_24%)]"
             aria-label="Portal"
           >
             {primary.map((item) => {
