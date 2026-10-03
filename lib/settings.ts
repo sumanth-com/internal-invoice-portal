@@ -1,4 +1,4 @@
-import { formatInvoiceTimestamp, invoiceToday } from "@/lib/invoice";
+import { financialYearLabel, formatInvoiceTimestamp, invoiceToday } from "@/lib/invoice";
 
 export const COMPANY_COLUMNS =
   "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, website, gstin, pan, logo_url, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate, updated_at";
@@ -203,6 +203,7 @@ const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const SWIFT_PATTERN = /^[A-Z0-9]{8}([A-Z0-9]{3})?$/;
 const PERIOD_PATTERN = /^[0-9]{4}(0[1-9]|1[0-2])$/;
+const FINANCIAL_YEAR_PERIOD = /^[0-9]{2}-[0-9]{2}$/;
 const RECORD_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RATE_PATTERN = /^\d+(\.\d{1,2})?$/;
@@ -242,12 +243,16 @@ export function emptyCompanyProfile(): CompanyProfile {
   };
 }
 
-export function currentNumberingPeriod() {
-  const today = invoiceToday();
-  return `${today.slice(0, 4)}${today.slice(5, 7)}`;
+export function isFinancialYearPeriod(period: string) {
+  return FINANCIAL_YEAR_PERIOD.test(period);
+}
+
+export function currentNumberingPeriod(today = invoiceToday()) {
+  return financialYearLabel(today) ?? "";
 }
 
 export function formatNumberingPeriod(period: string) {
+  if (isFinancialYearPeriod(period)) return `FY ${period}`;
   const year = Number(period.slice(0, 4));
   const month = Number(period.slice(4, 6));
   if (!year || !month) return period;
@@ -259,10 +264,17 @@ export function formatNumberingPeriod(period: string) {
 }
 
 export function formatSequenceNumber(period: string, nextNumber: number) {
+  if (isFinancialYearPeriod(period)) {
+    return `IF/${period}/${String(nextNumber).padStart(4, "0")}`;
+  }
   return `${period}${String(nextNumber).padStart(2, "0")}`;
 }
 
 export function sequenceSuffix(invoiceNumber: string, period: string) {
+  if (isFinancialYearPeriod(period)) {
+    const match = new RegExp(`^IF/${period}/(\\d+)$`).exec(invoiceNumber);
+    return match ? Number(match[1]) : null;
+  }
   if (!invoiceNumber.startsWith(period)) return null;
   const rest = invoiceNumber.slice(period.length);
   if (!/^[0-9]+$/.test(rest)) return null;
@@ -392,7 +404,7 @@ export function settingsErrorMessage(
     return "The next number must be greater than zero.";
   }
   if (error?.code === "23514" && /period/i.test(message)) {
-    return "The numbering period must stay in YYYYMM form.";
+    return "The numbering period is not valid.";
   }
   return fallback;
 }
@@ -577,14 +589,14 @@ export function parseNextNumber(value: string, floor: number) {
   if (nextNumber < floor) {
     return {
       ok: false as const,
-      error: `The next number must be at least ${floor}. Invoice numbers already issued in this month cannot be reused.`,
+      error: `The next number must be at least ${floor}. Invoice numbers already issued in this period cannot be reused.`,
     };
   }
   return { ok: true as const, nextNumber };
 }
 
 export function isNumberingPeriod(value: string) {
-  return PERIOD_PATTERN.test(value);
+  return PERIOD_PATTERN.test(value) || isFinancialYearPeriod(value);
 }
 
 export function isRecordId(value: string) {

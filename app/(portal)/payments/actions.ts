@@ -40,7 +40,7 @@ export async function recordPayment(
   const { value } = parsed;
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, status, total, currency, invoice_payments(amount)")
+    .select("id, status, total, balance_due, currency, invoice_payments(amount)")
     .eq("id", value.invoiceId)
     .maybeSingle();
 
@@ -56,7 +56,7 @@ export async function recordPayment(
       0,
     ),
   );
-  const { outstanding } = paymentBalance(Number(invoice.total), alreadyPaid, invoice.status);
+  const { outstanding } = paymentBalance(Number(invoice.balance_due), alreadyPaid, invoice.status);
   if (cents(value.amount) > cents(outstanding)) {
     return {
       error: null,
@@ -96,7 +96,7 @@ export async function recordPayment(
   const total = balance ? Number(balance.total) : Number(invoice.total);
   const nextOutstanding = balance
     ? roundMoney(Number(balance.outstanding))
-    : roundMoney(Math.max(total - amountPaid, 0));
+    : roundMoney(Math.max(Number(invoice.balance_due) - amountPaid, 0));
   const invoiceStatus = balance?.status === "paid" || nextOutstanding <= 0 ? "paid" : "issued";
 
   const saved: RecordedPayment = {
@@ -173,7 +173,7 @@ export async function updatePayment(
   const [invoiceResult, paymentsResult] = await Promise.all([
     supabase
       .from("invoices")
-      .select("status, total, currency")
+      .select("status, balance_due, currency")
       .eq("id", existing.data.invoice_id)
       .maybeSingle(),
     supabase.from("invoice_payments").select("id, amount").eq("invoice_id", existing.data.invoice_id),
@@ -197,7 +197,7 @@ export async function updatePayment(
       .filter((payment) => payment.id !== paymentId)
       .reduce((sum, payment) => sum + Number(payment.amount), 0),
   );
-  const room = roundMoney(Math.max(Number(invoiceResult.data.total) - others, 0));
+  const room = roundMoney(Math.max(Number(invoiceResult.data.balance_due) - others, 0));
   if (cents(parsed.value.amount) > cents(room)) {
     return {
       error: null,

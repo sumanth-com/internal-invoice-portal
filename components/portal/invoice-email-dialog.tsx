@@ -153,7 +153,7 @@ function EmailInvoiceForm({
             <Detail label="Beneficiary" value={beneficiaryName} />
             <Detail label="Invoice number" value={number} />
             <Detail label="Recipient email" value={recipient || "No email on file"} />
-            <Detail label="Total amount" value={formatMoney(total, currency)} />
+            <Detail label="Balance due" value={formatMoney(total, currency)} />
           </dl>
           {current.fieldErrors.recipient ? (
             <p className="mt-3 text-sm text-destructive">{current.fieldErrors.recipient}</p>

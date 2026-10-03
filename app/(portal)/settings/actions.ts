@@ -19,6 +19,7 @@ import {
   emptyGstFormState,
   emptyLogoState,
   emptyNumberingFormState,
+  isFinancialYearPeriod,
   isNumberingPeriod,
   isRecordId,
   mapBankAccount,
@@ -500,7 +501,7 @@ async function suffixesForPeriod(
   const numbers = await supabase
     .from("invoices")
     .select("invoice_number")
-    .like("invoice_number", `${period}%`);
+    .like("invoice_number", isFinancialYearPeriod(period) ? `IF/${period}/%` : `${period}%`);
   if (numbers.error) return { error: numbers.error.message, suffixes: [] as number[] };
   const suffixes: number[] = [];
   for (const row of numbers.data ?? []) {
@@ -601,7 +602,7 @@ export async function restoreInvoiceSequence(
     };
   }
   if (existing.data) {
-    return { ...emptyNumberingFormState, error: "This month already has a numbering counter." };
+    return { ...emptyNumberingFormState, error: "This financial year already has a numbering counter." };
   }
 
   const counted = await suffixesForPeriod(supabase, period);
@@ -611,7 +612,7 @@ export async function restoreInvoiceSequence(
   if (counted.suffixes.length === 0) {
     return {
       ...emptyNumberingFormState,
-      error: "This month does not need a counter yet. The first invoice will start at 01.",
+      error: "This period does not need a counter yet. The first invoice will start at 0001.",
     };
   }
 

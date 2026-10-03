@@ -54,7 +54,12 @@ export async function reportWorkbook(input: {
     { field: "Currency", value: input.view.currency },
     { field: "Total invoices", value: input.invoices.length },
     { field: "Invoice value", value: sum(input.invoices, (invoice) => invoice.total) },
-    { field: "GST", value: sum(input.invoices, (invoice) => invoice.gstAmount) },
+    { field: "CGST", value: sum(input.invoices, (invoice) => invoice.cgstAmount) },
+    { field: "SGST", value: sum(input.invoices, (invoice) => invoice.sgstAmount) },
+    { field: "IGST", value: sum(input.invoices, (invoice) => invoice.igstAmount) },
+    { field: "Total GST", value: sum(input.invoices, (invoice) => invoice.gstAmount) },
+    { field: "TDS", value: sum(input.invoices, (invoice) => invoice.tdsAmount) },
+    { field: "Balance due", value: sum(input.invoices, (invoice) => invoice.balanceDue) },
     { field: "Amount paid", value: sum(input.invoices, (invoice) => invoice.amountPaid) },
     { field: "Outstanding", value: sum(input.invoices, (invoice) => invoice.outstanding) },
   ];
@@ -71,7 +76,13 @@ export async function reportWorkbook(input: {
     const cell = row.getCell(2);
     if (cell.value instanceof Date) cell.numFmt = DATE;
     const label = String(row.getCell(1).value ?? "");
-    if (["Invoice value", "GST", "Amount paid", "Outstanding"].includes(label)) cell.numFmt = MONEY;
+    if (
+      ["Invoice value", "CGST", "SGST", "IGST", "Total GST", "TDS", "Balance due", "Amount paid", "Outstanding"].includes(
+        label,
+      )
+    ) {
+      cell.numFmt = MONEY;
+    }
   });
 
   if (input.type === "beneficiaries") {
@@ -99,8 +110,13 @@ export async function reportWorkbook(input: {
     { header: "Beneficiary", key: "beneficiary", width: 32 },
     { header: "Status", key: "status", width: 14 },
     { header: "Subtotal", key: "subtotal", width: 16 },
-    { header: "GST", key: "gst", width: 16 },
-    { header: "Total", key: "total", width: 16 },
+    { header: "CGST", key: "cgst", width: 14 },
+    { header: "SGST", key: "sgst", width: 14 },
+    { header: "IGST", key: "igst", width: 14 },
+    { header: "Total GST", key: "gst", width: 16 },
+    { header: "Invoice total", key: "total", width: 16 },
+    { header: "TDS", key: "tds", width: 14 },
+    { header: "Balance due", key: "balanceDue", width: 16 },
     { header: "Amount paid", key: "paid", width: 16 },
     { header: "Outstanding", key: "outstanding", width: 16 },
     { header: "Payment dates", key: "payments", width: 28 },
@@ -116,18 +132,23 @@ export async function reportWorkbook(input: {
       beneficiary: invoice.beneficiaryName,
       status: statusLabel(invoice.status),
       subtotal: roundMoney(invoice.subtotal),
+      cgst: roundMoney(invoice.cgstAmount),
+      sgst: roundMoney(invoice.sgstAmount),
+      igst: roundMoney(invoice.igstAmount),
       gst: roundMoney(invoice.gstAmount),
       total: roundMoney(invoice.total),
+      tds: roundMoney(invoice.tdsAmount),
+      balanceDue: roundMoney(invoice.balanceDue),
       paid: roundMoney(invoice.amountPaid),
       outstanding: roundMoney(invoice.outstanding),
       payments: [...new Set(invoice.payments.map((payment) => payment.date).filter(Boolean))].sort().join(", "),
     });
     if (row.getCell(2).value instanceof Date) row.getCell(2).numFmt = DATE;
-    paintMoney(row, [5, 6, 7, 8, 9]);
+    paintMoney(row, [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
   }
   styleHeader(details);
   details.views = [{ state: "frozen", ySplit: 1 }];
-  details.autoFilter = { from: "A1", to: "J1" };
+  details.autoFilter = { from: "A1", to: "O1" };
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

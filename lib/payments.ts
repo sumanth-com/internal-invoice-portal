@@ -186,7 +186,7 @@ export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
   const { data, error } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, total, currency, beneficiaries(legal_name), invoice_payments(amount)",
+      "id, invoice_number, total, balance_due, currency, beneficiaries(legal_name), invoice_payments(amount)",
     )
     .eq("status", "issued")
     .order("invoice_number", { ascending: false });
@@ -202,7 +202,7 @@ export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
         0,
       ),
     );
-    const balance = paymentBalance(money(row.total), paid, "issued");
+    const balance = paymentBalance(money(row.balance_due), paid, "issued");
     if (!(balance.outstanding > 0)) return [];
     return [
       {

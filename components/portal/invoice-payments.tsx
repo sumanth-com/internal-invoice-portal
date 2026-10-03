@@ -17,6 +17,7 @@ export function InvoicePayments({
     beneficiaryName: string;
     currency: string;
     total: number;
+    balanceDue: number;
     status: string;
   };
   payments: PaymentRecord[];
@@ -32,7 +33,7 @@ export function InvoicePayments({
   }
 
   const paid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  const balance = paymentBalance(invoice.total, paid, invoice.status);
+  const balance = paymentBalance(invoice.balanceDue, paid, invoice.status);
   const payable =
     invoice.status === "issued" && balance.outstanding > 0
       ? [
@@ -73,8 +74,8 @@ export function InvoicePayments({
               : invoice.status === "cancelled"
                 ? "Cancelled invoices cannot receive payments."
                 : invoice.status === "paid"
-                  ? "Recorded payments cover the invoice total."
-                  : "This invoice stays issued until recorded payments cover the total."}
+                  ? "Recorded payments cover the balance due."
+                  : "This invoice stays issued until recorded payments cover the balance due."}
           </p>
         </div>
         {payable.length > 0 ? (

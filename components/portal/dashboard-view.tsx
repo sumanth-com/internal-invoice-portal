@@ -449,7 +449,7 @@ function InvoicePanel({
                 beneficiaryId={invoice.beneficiaryId}
                 beneficiaryName={beneficiaryName}
                 beneficiaryEmail={beneficiaryEmail}
-                total={invoice.total}
+                total={invoice.balanceDue}
                 currency={invoice.currency}
                 compact
               />
@@ -485,9 +485,24 @@ function InvoicePanel({
         </div>
 
         <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <Metric label="Subtotal" value={formatMoney(invoice.subtotal, invoice.currency)} />
-          <Metric label="GST" value={formatMoney(invoice.gstAmount, invoice.currency)} />
-          <Metric label="Total" value={formatMoney(invoice.total, invoice.currency)} />
+          <Metric label="Subtotal" value={formatMoney((full?.invoice ?? invoice).subtotal, invoice.currency)} />
+          {full &&
+          full.invoice.cgstAmount + full.invoice.sgstAmount + full.invoice.igstAmount === 0 &&
+          full.invoice.gstAmount > 0 ? (
+            <Metric label="GST" value={formatMoney(full.invoice.gstAmount, invoice.currency)} />
+          ) : (
+            <>
+              <Metric label="CGST" value={formatMoney((full?.invoice ?? invoice).cgstAmount, invoice.currency)} />
+              <Metric label="SGST" value={formatMoney((full?.invoice ?? invoice).sgstAmount, invoice.currency)} />
+              <Metric label="IGST" value={formatMoney((full?.invoice ?? invoice).igstAmount, invoice.currency)} />
+            </>
+          )}
+          <Metric label="Invoice total" value={formatMoney((full?.invoice ?? invoice).total, invoice.currency)} />
+          <Metric label="TDS" value={formatMoney((full?.invoice ?? invoice).tdsAmount, invoice.currency)} />
+          <Metric
+            label="Balance due"
+            value={formatMoney((full?.invoice ?? invoice).balanceDue, invoice.currency)}
+          />
           <Metric label="Outstanding" value={formatMoney(outstanding, invoice.currency)} />
         </dl>
 

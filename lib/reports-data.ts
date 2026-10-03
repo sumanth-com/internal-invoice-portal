@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/server";
 const PAGE_SIZE = 1000;
 
 const INVOICE_COLUMNS = `
-  id, invoice_number, invoice_date, status, subtotal, gst_amount, total, currency, beneficiary_id,
+  id, invoice_number, invoice_date, status, subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id,
   beneficiaries ( legal_name ),
   invoice_payments ( amount, payment_date, payment_mode )
 `;
@@ -26,8 +26,13 @@ type InvoiceRow = {
   invoice_date: string;
   status: string;
   subtotal: number | string;
+  cgst_amount: number | string;
+  sgst_amount: number | string;
+  igst_amount: number | string;
   gst_amount: number | string;
   total: number | string;
+  tds_amount: number | string;
+  balance_due: number | string;
   currency: string | null;
   beneficiary_id: string;
   beneficiaries: Embedded<{ legal_name: string }>;
@@ -60,7 +65,8 @@ function mapInvoice(row: InvoiceRow): ReportInvoice | null {
     }),
   );
   const paid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  const balance = paymentBalance(money(row.total), paid, row.status);
+  const balanceDue = money(row.balance_due);
+  const balance = paymentBalance(balanceDue, paid, row.status);
   return {
     id: row.id,
     number: row.invoice_number,
@@ -69,8 +75,13 @@ function mapInvoice(row: InvoiceRow): ReportInvoice | null {
     beneficiaryName: beneficiary?.legal_name?.trim() || "—",
     status: row.status,
     subtotal: money(row.subtotal),
+    cgstAmount: money(row.cgst_amount),
+    sgstAmount: money(row.sgst_amount),
+    igstAmount: money(row.igst_amount),
     gstAmount: money(row.gst_amount),
     total: money(row.total),
+    tdsAmount: money(row.tds_amount),
+    balanceDue,
     currency: row.currency?.trim() || "INR",
     amountPaid: balance.amountPaid,
     outstanding: balance.outstanding,

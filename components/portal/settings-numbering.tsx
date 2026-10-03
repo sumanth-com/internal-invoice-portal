@@ -26,8 +26,8 @@ function SequenceCard({ row }: { row: InvoiceSequenceRow }) {
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
         {row.issuedCount === 0
-          ? "No invoices have been numbered in this month."
-          : `${row.issuedCount} invoice${row.issuedCount === 1 ? "" : "s"} already numbered in this month.`}{" "}
+          ? "No invoices have been numbered in this financial year."
+          : `${row.issuedCount} invoice${row.issuedCount === 1 ? "" : "s"} already numbered in this financial year.`}{" "}
         The next number is assigned automatically when an invoice is created.
       </p>
       {behind ? (
@@ -44,7 +44,7 @@ export function InvoiceNumberingSection({ sequences }: { sequences: InvoiceSeque
   return (
     <SettingsSection
       title="Invoice numbering"
-      description="Invoice numbers are generated automatically. Each month uses YYYYMM plus a sequence that restarts at 01. September 2026 starts at 20260901. October 2026 starts at 20261001. Issued numbers cannot be reused."
+      description="New invoice numbers follow the Indian financial year, from 1 April to 31 March. Each year uses IF, the year, and a sequence that restarts at 0001, such as IF/26-27/0001. Earlier invoices keep their original numbers. Issued numbers cannot be reused."
     >
       <div className="grid gap-3">
         {sequences.map((row) => (

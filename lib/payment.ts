@@ -137,14 +137,15 @@ export function paymentListHref(options: {
   return query ? `/payments?${query}` : "/payments";
 }
 
-export function paymentBalance(total: number, amountPaid: number, status: string) {
+export function paymentBalance(balanceDue: number, amountPaid: number, status: string) {
   const paid = roundMoney(amountPaid);
+  const due = roundMoney(balanceDue);
   if (status === "draft" || status === "cancelled") {
     return { amountPaid: paid, outstanding: 0 };
   }
   return {
     amountPaid: paid,
-    outstanding: roundMoney(Math.max(total - paid, 0)),
+    outstanding: roundMoney(Math.max(due - paid, 0)),
   };
 }
 

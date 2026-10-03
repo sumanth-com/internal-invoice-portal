@@ -23,9 +23,9 @@ function Balance({ invoice }: { invoice: PayableInvoice }) {
   return (
     <dl className="grid grid-cols-1 gap-3 rounded-lg border bg-background p-3 text-sm sm:grid-cols-3">
       <div>
-        <dt className="text-muted-foreground">Invoice total</dt>
+        <dt className="text-muted-foreground">Balance due</dt>
         <dd className="mt-1 font-medium tabular-nums">
-          {formatMoney(invoice.total, invoice.currency)}
+          {formatMoney(invoice.amountPaid + invoice.outstanding, invoice.currency)}
         </dd>
       </div>
       <div>

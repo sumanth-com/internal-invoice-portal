@@ -1,3 +1,5 @@
+import { hasLegacyGst, previewTax, supplyIsIntrastate } from "@/lib/gst";
+
 export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
 
 export type InvoiceSort =
@@ -33,11 +35,17 @@ export type InvoiceInput = {
   dueDate: string | null;
   billFrom: string | null;
   billTo: string | null;
+  placeOfSupply: string | null;
+  supplyState: string | null;
+  stateCode: string | null;
+  clientGstin: string | null;
+  dealReference: string | null;
   currency: string;
   paymentTerms: string | null;
   notes: string | null;
   gstEnabled: boolean;
   gstRate: number;
+  tdsAmount: number;
   items: InvoiceLineInput[];
 };
 
@@ -127,6 +135,8 @@ export type InvoiceSummary = {
   subtotal: number;
   gstAmount: number;
   total: number;
+  tdsAmount: number;
+  balanceDue: number;
   currency: string;
   status: InvoiceStatus;
   paymentStanding: InvoicePaymentStanding;
@@ -160,11 +170,21 @@ export type InvoiceDetail = {
   currency: string;
   paymentTerms: string | null;
   notes: string | null;
+  placeOfSupply: string | null;
+  supplyState: string | null;
+  stateCode: string | null;
+  clientGstin: string | null;
+  dealReference: string | null;
   gstEnabled: boolean;
   gstRate: number;
   subtotal: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
   gstAmount: number;
   total: number;
+  tdsAmount: number;
+  balanceDue: number;
   amountInWords: string;
   issuedAt: string | null;
   paidAt: string | null;
@@ -285,8 +305,40 @@ export function invoiceToday() {
   }).format(new Date());
 }
 
+const FINANCIAL_YEAR_NUMBER = /^IF\/(\d{2})-(\d{2})\/\d{4}$/;
+const MONTHLY_NUMBER = /^[0-9]{8,}$/;
+
+export function isFinancialYearNumber(invoiceNumber: string) {
+  return FINANCIAL_YEAR_NUMBER.test(invoiceNumber);
+}
+
+export function financialYearLabel(date: string) {
+  if (!DATE_PATTERN.test(date)) return null;
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  const start = month >= 4 ? year : year - 1;
+  const end = start + 1;
+  return `${String(start).slice(2)}-${String(end).slice(2)}`;
+}
+
+export function financialYearBounds(label: string) {
+  const match = /^(\d{2})-(\d{2})$/.exec(label);
+  if (!match) return null;
+  const start = 2000 + Number(match[1]);
+  const end = 2000 + Number(match[2]);
+  if (end !== start + 1) return null;
+  return { start: `${start}-04-01`, end: `${end}-03-31` };
+}
+
 export function invoiceNumberPeriod(invoiceNumber: string) {
   return invoiceNumber.slice(0, 6);
+}
+
+export function invoiceDateWindow(invoiceNumber: string) {
+  if (MONTHLY_NUMBER.test(invoiceNumber)) return periodDateBounds(invoiceNumber.slice(0, 6));
+  const match = FINANCIAL_YEAR_NUMBER.exec(invoiceNumber);
+  if (!match) return null;
+  return financialYearBounds(`${match[1]}-${match[2]}`);
 }
 
 export function periodDateBounds(period: string) {
@@ -369,16 +421,41 @@ export function previewTotals(
   items: Pick<InvoiceLineInput, "quantity" | "rate">[],
   gstEnabled: boolean,
   gstRate: number,
+  options: {
+    tdsAmount?: number;
+    companyState?: string | null;
+    companyGstin?: string | null;
+    supplyState?: string | null;
+    stateCode?: string | null;
+    placeOfSupply?: string | null;
+  } = {},
 ) {
   const subtotal = roundMoney(
     items.reduce((sum, item) => sum + roundMoney(item.quantity * item.rate), 0),
   );
-  const gstAmount = gstEnabled ? roundMoney((subtotal * gstRate) / 100) : 0;
-  return {
+  return previewTax({
     subtotal,
-    gstAmount,
-    total: roundMoney(subtotal + gstAmount),
-  };
+    gstEnabled,
+    gstRate,
+    tdsAmount: options.tdsAmount ?? 0,
+    intrastate: supplyIsIntrastate(
+      { state: options.companyState, gstin: options.companyGstin },
+      {
+        state: options.supplyState,
+        stateCode: options.stateCode,
+        placeOfSupply: options.placeOfSupply,
+      },
+    ),
+  });
+}
+
+export function invoiceUsesLegacyGst(invoice: {
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  gstAmount: number;
+}) {
+  return hasLegacyGst(invoice);
 }
 
 function line(value: string | null | undefined) {
@@ -592,7 +669,7 @@ function optionalText(
 
 export function parseInvoiceForm(
   formData: FormData,
-  options: { numberPeriod?: string } = {},
+  options: { invoiceNumber?: string } = {},
 ): { ok: true; value: InvoiceInput } | { ok: false; fieldErrors: Record<string, string> } {
   const errors: Record<string, string> = {};
   const beneficiaryId = fieldText(formData, "beneficiary_id");
@@ -601,13 +678,13 @@ export function parseInvoiceForm(
   }
 
   const invoiceDate = fieldText(formData, "invoice_date");
+  const dateWindow = options.invoiceNumber ? invoiceDateWindow(options.invoiceNumber) : null;
   if (!DATE_PATTERN.test(invoiceDate)) {
     errors.invoice_date = "Enter an invoice date.";
-  } else if (
-    options.numberPeriod &&
-    invoiceDate.slice(0, 4) + invoiceDate.slice(5, 7) !== options.numberPeriod
-  ) {
-    errors.invoice_date = "Invoice date must stay in the month of the invoice number.";
+  } else if (dateWindow && (invoiceDate < dateWindow.start || invoiceDate > dateWindow.end)) {
+    errors.invoice_date = isFinancialYearNumber(options.invoiceNumber ?? "")
+      ? "Invoice date must stay in the financial year of the invoice number."
+      : "Invoice date must stay in the month of the invoice number.";
   }
 
   const dueDateText = fieldText(formData, "due_date");
@@ -651,6 +728,45 @@ export function parseInvoiceForm(
     errors,
   );
   const notes = optionalText(fieldText(formData, "notes"), 2000, "notes", "Notes", errors);
+  const placeOfSupply = optionalText(
+    fieldText(formData, "place_of_supply"),
+    80,
+    "place_of_supply",
+    "Place of supply",
+    errors,
+  );
+  const supplyState = optionalText(
+    fieldText(formData, "supply_state"),
+    80,
+    "supply_state",
+    "State",
+    errors,
+  );
+  const stateCodeText = fieldText(formData, "state_code");
+  let stateCode: string | null = null;
+  if (stateCodeText) {
+    if (!/^[0-9]{2}$/.test(stateCodeText)) {
+      errors.state_code = "State code must be 2 digits.";
+    } else {
+      stateCode = stateCodeText;
+    }
+  }
+  const clientGstinText = fieldText(formData, "client_gstin").toUpperCase();
+  let clientGstin: string | null = null;
+  if (clientGstinText) {
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(clientGstinText)) {
+      errors.client_gstin = "Enter a valid 15-character GSTIN, or leave it blank.";
+    } else {
+      clientGstin = clientGstinText;
+    }
+  }
+  const dealReference = optionalText(
+    fieldText(formData, "deal_reference"),
+    120,
+    "deal_reference",
+    "Deal / brand reference",
+    errors,
+  );
 
   const currencyText = fieldText(formData, "currency").toUpperCase() || "INR";
   if (!/^[A-Z]{3}$/.test(currencyText)) {
@@ -669,7 +785,26 @@ export function parseInvoiceForm(
     errors.gst_rate = "GST rate must be between 0 and 100.";
   }
 
+  const tdsText = fieldText(formData, "tds_amount") || "0";
+  const tdsAmount = Number(tdsText);
+  if (!/^\d+(\.\d{1,2})?$/.test(tdsText) || !Number.isFinite(tdsAmount) || tdsAmount < 0) {
+    errors.tds_amount = "TDS must be a rupee amount of zero or more.";
+  }
+
   const items = parseInvoiceItems(fieldText(formData, "items"), errors);
+  if (items && Number.isFinite(tdsAmount) && tdsAmount >= 0) {
+    const preview = previewTotals(items, gstEnabled, Number.isFinite(gstRate) ? gstRate : 0, {
+      tdsAmount,
+      companyState: fieldText(formData, "company_state"),
+      companyGstin: fieldText(formData, "company_gstin"),
+      supplyState,
+      stateCode,
+      placeOfSupply,
+    });
+    if (tdsAmount > preview.total) {
+      errors.tds_amount = "TDS cannot exceed the invoice total.";
+    }
+  }
 
   if (Object.keys(errors).length > 0 || !items) {
     return { ok: false, fieldErrors: errors };
@@ -684,11 +819,17 @@ export function parseInvoiceForm(
       dueDate,
       billFrom,
       billTo,
+      placeOfSupply,
+      supplyState,
+      stateCode,
+      clientGstin,
+      dealReference,
       currency: currencyText,
       paymentTerms,
       notes,
       gstEnabled,
       gstRate,
+      tdsAmount,
       items,
     },
   };
@@ -724,7 +865,7 @@ function parseInvoiceItems(raw: string, errors: Record<string, string>) {
       errors[`item-${index}-description`] = "Description must be 500 characters or fewer.";
     }
     if (hsn.length > 20) {
-      errors[`item-${index}-hsn`] = "HSN/SAC must be 20 characters or fewer.";
+      errors[`item-${index}-hsn`] = "SAC must be 20 characters or fewer.";
     }
 
     const quantity = Number(quantityText);
@@ -763,6 +904,11 @@ export function invoiceToRow(value: InvoiceInput) {
     due_date: value.dueDate,
     bill_from: value.billFrom,
     bill_to: value.billTo,
+    place_of_supply: value.placeOfSupply,
+    supply_state: value.supplyState,
+    state_code: value.stateCode,
+    client_gstin: value.clientGstin,
+    deal_reference: value.dealReference,
     currency: value.currency,
     payment_terms: value.paymentTerms,
     notes: value.notes,
@@ -782,6 +928,12 @@ export function invoiceErrorMessage(
     "Invoices must be created as drafts",
     "Invoice numbers cannot be changed",
     "Invoice date must stay in the month of the invoice number",
+    "Invoice date must stay in the financial year of the invoice number",
+    "Invoice date must stay in the period of the invoice number",
+    "TDS cannot exceed the invoice total",
+    "Payments cannot exceed the balance due",
+    "Invoice can be marked paid only when payments cover the balance due",
+    "Invoice balance due cannot fall below recorded payments",
     "A bank account is required before issuing an invoice",
     "Bill-from and bill-to are required before issuing an invoice",
     "At least one line item is required before issuing an invoice",

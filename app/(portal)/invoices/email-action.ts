@@ -54,7 +54,7 @@ export async function emailInvoice(
       invoiceNumber: data.invoice.invoiceNumber,
       invoiceDate: data.invoice.invoiceDate,
       recipientName: data.invoice.beneficiaryName,
-      total: data.invoice.total,
+      total: data.invoice.balanceDue,
       currency: data.invoice.currency,
       pdf: Buffer.from(pdf),
       pdfFileName: invoicePdfFileName(data.invoice.invoiceNumber),

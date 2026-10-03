@@ -22,7 +22,7 @@ export async function loadDashboardInvoiceDetail(id: string): Promise<DashboardI
 
   const payments = await loadInvoicePayments(id);
   const amountPaid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  const balance = paymentBalance(invoice.total, amountPaid, invoice.status);
+  const balance = paymentBalance(invoice.balanceDue, amountPaid, invoice.status);
 
   return {
     invoice,

@@ -265,8 +265,13 @@ export function ReportsView({
                 <Th>Beneficiary</Th>
                 <Th>Date</Th>
                 {type !== "gst" && type !== "payments" ? <Th>Status</Th> : null}
-                {type === "gst" ? <Th align="right">Subtotal</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">GST</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">Subtotal</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">CGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">SGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">IGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">Total GST</Th> : null}
+                {type === "all" || type === "gst" ? <Th align="right">TDS</Th> : null}
+                {type === "all" || type === "gst" || type === "outstanding" ? <Th align="right">Balance due</Th> : null}
                 {type === "payments" ? <Th>Mode</Th> : null}
                 {type === "all" || type === "outstanding" || type === "payments" ? <Th align="right">Paid</Th> : null}
                 {type === "all" || type === "outstanding" || type === "payments" ? <Th align="right">Outstanding</Th> : null}
@@ -290,8 +295,15 @@ export function ReportsView({
                         <Badge variant={statusVariant(invoice.status)}>{statusLabel(invoice.status)}</Badge>
                       </Td>
                     ) : null}
-                    {type === "gst" ? <Td align="right">{money(invoice.subtotal, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.subtotal, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.cgstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.sgstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.igstAmount, currency)}</Td> : null}
                     {type === "all" || type === "gst" ? <Td align="right">{money(invoice.gstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.tdsAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" || type === "outstanding" ? (
+                      <Td align="right">{money(invoice.balanceDue, currency)}</Td>
+                    ) : null}
                     {type === "payments" ? <Td>{modes(invoice)}</Td> : null}
                     {type === "all" || type === "outstanding" || type === "payments" ? (
                       <Td align="right">{money(invoice.amountPaid, currency)}</Td>
@@ -315,7 +327,7 @@ function ReportTable({ children, countLabel }: { children: ReactNode; countLabel
   return (
     <>
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[40rem] border-separate border-spacing-0 text-sm">{children}</table>
+        <table className="w-full min-w-[72rem] border-separate border-spacing-0 text-sm">{children}</table>
       </div>
       <p className="shrink-0 border-t px-4 py-3 text-sm text-muted-foreground">{countLabel}</p>
     </>

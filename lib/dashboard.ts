@@ -8,8 +8,13 @@ export type DashboardInvoice = {
   invoiceDate: string;
   status: InvoiceStatus;
   subtotal: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
   gstAmount: number;
   total: number;
+  tdsAmount: number;
+  balanceDue: number;
   amountPaid: number;
   outstanding: number;
   currency: string;
@@ -111,7 +116,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
   let invoiceQuery = supabase
     .from("invoices")
     .select(
-      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, currency, bill_to, beneficiary_id, beneficiaries(legal_name, email)",
+      "id, invoice_number, invoice_date, status, subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due, currency, bill_to, beneficiary_id, beneficiaries(legal_name, email)",
     )
     .order("created_at", { ascending: false })
     .limit(listLimit + 1);
@@ -177,15 +182,22 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
       const amountPaid = balance?.amountPaid ?? 0;
       const outstanding =
         balance?.outstanding ??
-        (status === "draft" || status === "cancelled" ? 0 : Math.max(totalAmount - amountPaid, 0));
+        (status === "draft" || status === "cancelled"
+          ? 0
+          : Math.max(Number(row.balance_due) - amountPaid, 0));
       return {
         id: row.id,
         invoiceNumber: row.invoice_number,
         invoiceDate: row.invoice_date,
         status,
         subtotal: Number(row.subtotal),
+        cgstAmount: Number(row.cgst_amount),
+        sgstAmount: Number(row.sgst_amount),
+        igstAmount: Number(row.igst_amount),
         gstAmount: Number(row.gst_amount),
         total: totalAmount,
+        tdsAmount: Number(row.tds_amount),
+        balanceDue: Number(row.balance_due),
         amountPaid,
         outstanding,
         currency: row.currency,

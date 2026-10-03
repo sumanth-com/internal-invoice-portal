@@ -9,9 +9,11 @@ import {
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import { formatGstRate } from "@/lib/gst";
 import {
   formatInvoiceDate,
   formatMoney,
+  invoiceUsesLegacyGst,
   statusLabel,
   type InvoiceDetail,
 } from "@/lib/invoice";
@@ -358,6 +360,15 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
                 />
               ) : null}
               <MetaRow label="Currency" value={invoice.currency} />
+              {invoice.placeOfSupply ? (
+                <MetaRow label="Place of supply" value={invoice.placeOfSupply} />
+              ) : null}
+              {invoice.supplyState ? <MetaRow label="State" value={invoice.supplyState} /> : null}
+              {invoice.stateCode ? <MetaRow label="State code" value={invoice.stateCode} /> : null}
+              {invoice.clientGstin ? <MetaRow label="Client GSTIN" value={invoice.clientGstin} /> : null}
+              {invoice.dealReference ? (
+                <MetaRow label="Deal / brand" value={invoice.dealReference} />
+              ) : null}
             </View>
           </View>
         </View>
@@ -371,10 +382,10 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
           <View style={s.thead} fixed>
             <Text style={s.colIndex}>#</Text>
             <Text style={s.colDescription}>Description</Text>
-            <Text style={s.colHsn}>HSN/SAC</Text>
+            <Text style={s.colHsn}>SAC</Text>
             <Text style={s.colQty}>Qty</Text>
             <Text style={s.colRate}>Rate</Text>
-            <Text style={s.colAmount}>Amount</Text>
+            <Text style={s.colAmount}>Taxable</Text>
           </View>
           {invoice.items.length === 0 ? (
             <Text style={s.empty}>No line items.</Text>
@@ -436,17 +447,43 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
               <Text style={s.metaLabel}>Subtotal</Text>
               <Text style={s.cellStrong}>{money(invoice.subtotal)}</Text>
             </View>
+            {invoiceUsesLegacyGst(invoice) ? (
+              <View style={s.totalRow}>
+                <Text style={s.metaLabel}>GST</Text>
+                <Text style={s.cellStrong}>{money(invoice.gstAmount)}</Text>
+              </View>
+            ) : invoice.igstAmount > 0 ? (
+              <View style={s.totalRow}>
+                <Text style={s.metaLabel}>{`IGST @ ${formatGstRate(invoice.gstRate)}%`}</Text>
+                <Text style={s.cellStrong}>{money(invoice.igstAmount)}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={s.totalRow}>
+                  <Text style={s.metaLabel}>
+                    {`CGST @ ${formatGstRate(invoice.gstEnabled ? invoice.gstRate / 2 : 0)}%`}
+                  </Text>
+                  <Text style={s.cellStrong}>{money(invoice.cgstAmount)}</Text>
+                </View>
+                <View style={s.totalRow}>
+                  <Text style={s.metaLabel}>
+                    {`SGST @ ${formatGstRate(invoice.gstEnabled ? invoice.gstRate / 2 : 0)}%`}
+                  </Text>
+                  <Text style={s.cellStrong}>{money(invoice.sgstAmount)}</Text>
+                </View>
+              </>
+            )}
             <View style={s.totalRow}>
-              <Text style={s.metaLabel}>
-                {invoice.gstEnabled
-                  ? `GST @ ${invoice.gstRate}%`
-                  : "GST (not applied)"}
-              </Text>
-              <Text style={s.cellStrong}>{money(invoice.gstAmount)}</Text>
+              <Text style={s.metaLabel}>Invoice total</Text>
+              <Text style={s.cellStrong}>{money(invoice.total)}</Text>
+            </View>
+            <View style={s.totalRow}>
+              <Text style={s.metaLabel}>TDS</Text>
+              <Text style={s.cellStrong}>{money(invoice.tdsAmount)}</Text>
             </View>
             <View style={s.grandTotal}>
-              <Text>Total</Text>
-              <Text>{money(invoice.total)}</Text>
+              <Text>Balance due</Text>
+              <Text>{money(invoice.balanceDue)}</Text>
             </View>
             <View style={s.signature}>
               <Text style={s.signatureFor}>For {companyName}</Text>

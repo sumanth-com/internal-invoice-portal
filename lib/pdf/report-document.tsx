@@ -116,7 +116,12 @@ function ReportDocument({
   const figures = [
     { label: "Invoices", value: String(invoices.length) },
     { label: "Invoice value", value: money(sum(invoices, (invoice) => invoice.total), view.currency) },
-    { label: "GST", value: money(sum(invoices, (invoice) => invoice.gstAmount), view.currency) },
+    { label: "CGST", value: money(sum(invoices, (invoice) => invoice.cgstAmount), view.currency) },
+    { label: "SGST", value: money(sum(invoices, (invoice) => invoice.sgstAmount), view.currency) },
+    { label: "IGST", value: money(sum(invoices, (invoice) => invoice.igstAmount), view.currency) },
+    { label: "Total GST", value: money(sum(invoices, (invoice) => invoice.gstAmount), view.currency) },
+    { label: "TDS", value: money(sum(invoices, (invoice) => invoice.tdsAmount), view.currency) },
+    { label: "Balance due", value: money(sum(invoices, (invoice) => invoice.balanceDue), view.currency) },
     { label: "Amount paid", value: money(sum(invoices, (invoice) => invoice.amountPaid), view.currency) },
     { label: "Outstanding", value: money(sum(invoices, (invoice) => invoice.outstanding), view.currency) },
   ];

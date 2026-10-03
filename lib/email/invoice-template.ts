@@ -111,7 +111,7 @@ export function renderInvoiceEmail(details: InvoiceEmailDetails): InvoiceEmailCo
               <td class="email-pad" style="padding:36px 40px 28px;">
                 <img src="cid:${INVOICE_EMAIL_LOGO_CID}" alt="iFranchise" width="56" height="54" style="display:block;margin:0 auto;width:56px;height:54px;border:0;outline:none;text-decoration:none;" />
                 <p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;font-weight:600;color:#2f0da3;text-align:center;">iFranchise</p>
-                <p style="margin:32px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.4;color:#3f3a4d;">Invoice</p>
+                <p style="margin:32px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.4;color:#3f3a4d;">Balance due</p>
                 <p class="total-amount" style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:40px;line-height:1.1;font-weight:700;letter-spacing:-0.03em;color:#1c1733;">${escapeHtml(total)}</p>
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;">
                   <tr>
@@ -146,7 +146,7 @@ export function renderInvoiceEmail(details: InvoiceEmailDetails): InvoiceEmailCo
     `Invoice number: ${invoiceNumber}`,
     `Invoice date: ${invoiceDate}`,
     `Recipient: ${recipientName}`,
-    `Total: ${total}`,
+    `Balance due: ${total}`,
     "",
     "The invoice PDF is attached to this email.",
     "",

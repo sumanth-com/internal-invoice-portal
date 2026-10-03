@@ -1,4 +1,5 @@
-import { formatInvoiceDate, formatMoney, type InvoiceDetail } from "@/lib/invoice";
+import { formatGstRate } from "@/lib/gst";
+import { formatInvoiceDate, formatMoney, invoiceUsesLegacyGst, type InvoiceDetail } from "@/lib/invoice";
 
 function Block({ label, value }: { label: string; value: string | null }) {
   return (
@@ -7,6 +8,25 @@ function Block({ label, value }: { label: string; value: string | null }) {
         {label}
       </p>
       <p className="mt-2 whitespace-pre-line text-sm">{value?.trim() || "—"}</p>
+    </div>
+  );
+}
+
+function SupplyFact({ label, value }: { label: string; value: string | null }) {
+  if (!value?.trim()) return null;
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-1">{value}</dd>
+    </div>
+  );
+}
+
+function MoneyRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={strong ? "flex justify-between gap-6 font-semibold" : "flex justify-between gap-6"}>
+      <span className={strong ? undefined : "text-muted-foreground"}>{label}</span>
+      <span className="tabular-nums">{value}</span>
     </div>
   );
 }
@@ -42,15 +62,23 @@ export function InvoicePreview({ invoice }: { invoice: InvoiceDetail }) {
         </div>
       </div>
 
+      <dl className="grid gap-3 border-b py-6 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <SupplyFact label="Place of supply" value={invoice.placeOfSupply} />
+        <SupplyFact label="State" value={invoice.supplyState} />
+        <SupplyFact label="State code" value={invoice.stateCode} />
+        <SupplyFact label="Client GSTIN" value={invoice.clientGstin} />
+        <SupplyFact label="Deal / brand reference" value={invoice.dealReference} />
+      </dl>
+
       <div className="overflow-x-auto py-6">
         <table className="w-full min-w-[36rem] text-sm">
           <thead className="border-b text-left text-muted-foreground">
             <tr>
               <th className="py-2 pr-3 font-medium">Description</th>
-              <th className="py-2 pr-3 font-medium">HSN/SAC</th>
+              <th className="py-2 pr-3 font-medium">SAC</th>
               <th className="py-2 pr-3 text-right font-medium">Qty</th>
               <th className="py-2 pr-3 text-right font-medium">Rate</th>
-              <th className="py-2 text-right font-medium">Amount</th>
+              <th className="py-2 text-right font-medium">Taxable amount</th>
             </tr>
           </thead>
           <tbody>
@@ -79,27 +107,29 @@ export function InvoicePreview({ invoice }: { invoice: InvoiceDetail }) {
         </table>
       </div>
 
-      <div className="ml-auto grid max-w-xs gap-2 border-t pt-4 text-sm">
-        <div className="flex justify-between gap-6">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="tabular-nums">
-            {formatMoney(invoice.subtotal, invoice.currency)}
-          </span>
-        </div>
-        <div className="flex justify-between gap-6">
-          <span className="text-muted-foreground">
-            GST {invoice.gstEnabled ? `(${invoice.gstRate}%)` : "(not applied)"}
-          </span>
-          <span className="tabular-nums">
-            {formatMoney(invoice.gstAmount, invoice.currency)}
-          </span>
-        </div>
-        <div className="flex justify-between gap-6 text-base font-semibold">
-          <span>Total</span>
-          <span className="tabular-nums">
-            {formatMoney(invoice.total, invoice.currency)}
-          </span>
-        </div>
+      <div className="ml-auto grid max-w-sm gap-2 border-t pt-4 text-sm">
+        <MoneyRow label="Subtotal" value={formatMoney(invoice.subtotal, invoice.currency)} />
+        {invoiceUsesLegacyGst(invoice) ? (
+          <MoneyRow label="GST" value={formatMoney(invoice.gstAmount, invoice.currency)} />
+        ) : (
+          <>
+            <MoneyRow
+              label={`CGST @ ${formatGstRate(invoice.cgstAmount > 0 ? invoice.gstRate / 2 : 0)}%`}
+              value={formatMoney(invoice.cgstAmount, invoice.currency)}
+            />
+            <MoneyRow
+              label={`SGST @ ${formatGstRate(invoice.sgstAmount > 0 ? invoice.gstRate / 2 : 0)}%`}
+              value={formatMoney(invoice.sgstAmount, invoice.currency)}
+            />
+            <MoneyRow
+              label={`IGST @ ${formatGstRate(invoice.igstAmount > 0 ? invoice.gstRate : 0)}%`}
+              value={formatMoney(invoice.igstAmount, invoice.currency)}
+            />
+          </>
+        )}
+        <MoneyRow label="Invoice total" value={formatMoney(invoice.total, invoice.currency)} strong />
+        <MoneyRow label="TDS" value={formatMoney(invoice.tdsAmount, invoice.currency)} />
+        <MoneyRow label="Balance due" value={formatMoney(invoice.balanceDue, invoice.currency)} strong />
         <p className="pt-2 text-muted-foreground">{invoice.amountInWords}</p>
       </div>
 

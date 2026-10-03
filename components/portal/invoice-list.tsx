@@ -55,7 +55,7 @@ const paymentFilters: { value: InvoicePaymentFilter; label: string }[] = [
 ];
 
 const invoiceColumns =
-  "grid grid-cols-[minmax(10rem,1.2fr)_minmax(9rem,1fr)_minmax(12rem,1.5fr)_10.5rem_11rem_9rem] items-center";
+  "grid grid-cols-[minmax(11rem,1.3fr)_minmax(8.5rem,0.9fr)_minmax(11rem,1.3fr)_8.5rem_8rem_7.5rem_9.5rem_8.5rem_8rem] items-center";
 const headCell =
   "bg-primary px-4 py-3 text-xs font-semibold tracking-wide text-primary-foreground whitespace-nowrap";
 const bodyCell = "min-w-0 px-4 py-3";
@@ -314,7 +314,7 @@ export function InvoiceList({
 
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-auto">
-            <div role="table" className="min-w-[61.5rem] text-sm">
+            <div role="table" className="min-w-[80rem] text-sm">
               <div
                 role="row"
                 className={cn(invoiceColumns, "sticky top-0 z-10 border-b border-primary-foreground/20 bg-primary text-left")}
@@ -322,7 +322,10 @@ export function InvoiceList({
                 <div role="columnheader" className={headCell}>Invoice Number</div>
                 <div role="columnheader" className={headCell}>Date</div>
                 <div role="columnheader" className={headCell}>Beneficiary</div>
-                <div role="columnheader" className={cn(headCell, "text-right")}>Amount</div>
+                <div role="columnheader" className={cn(headCell, "text-right")}>Taxable Amount</div>
+                <div role="columnheader" className={cn(headCell, "text-right")}>GST</div>
+                <div role="columnheader" className={cn(headCell, "text-right")}>TDS</div>
+                <div role="columnheader" className={cn(headCell, "text-right")}>Balance Due</div>
                 <div role="columnheader" className={cn(headCell, "text-center")}>Status</div>
                 <div role="columnheader" className={cn(headCell, "text-center")}>Actions</div>
               </div>
@@ -350,7 +353,16 @@ export function InvoiceList({
                       {invoice.beneficiaryName}
                     </div>
                     <div role="cell" className={cn(bodyCell, "text-right tabular-nums whitespace-nowrap")}>
-                      {formatMoney(invoice.total, invoice.currency)}
+                      {formatMoney(invoice.subtotal, invoice.currency)}
+                    </div>
+                    <div role="cell" className={cn(bodyCell, "text-right tabular-nums whitespace-nowrap")}>
+                      {formatMoney(invoice.gstAmount, invoice.currency)}
+                    </div>
+                    <div role="cell" className={cn(bodyCell, "text-right tabular-nums whitespace-nowrap")}>
+                      {formatMoney(invoice.tdsAmount, invoice.currency)}
+                    </div>
+                    <div role="cell" className={cn(bodyCell, "text-right tabular-nums whitespace-nowrap")}>
+                      {formatMoney(invoice.balanceDue, invoice.currency)}
                     </div>
                     <div role="cell" className={cn(bodyCell, "flex justify-center")}>
                       <StatusControl

@@ -74,7 +74,7 @@ export function InvoiceDetailView({
                 beneficiaryId={invoice.beneficiaryId}
                 beneficiaryName={invoice.beneficiaryName}
                 beneficiaryEmail={invoice.beneficiaryEmail}
-                total={invoice.total}
+                total={invoice.balanceDue}
                 currency={invoice.currency}
               />
             ) : null}
@@ -131,6 +131,7 @@ export function InvoiceDetailView({
               beneficiaryName: invoice.beneficiaryName,
               currency: invoice.currency,
               total: invoice.total,
+              balanceDue: invoice.balanceDue,
               status: invoice.status,
             }}
             payments={payments}
@@ -186,13 +187,13 @@ function PaymentStatusCard({
   payments: PaymentRecord[];
 }) {
   const paid = roundMoney(payments.reduce((sum, payment) => sum + payment.amount, 0));
-  const balance = paymentBalance(invoice.total, paid, invoice.status);
+  const balance = paymentBalance(invoice.balanceDue, paid, invoice.status);
   const standing = paymentStanding(invoice.status, balance.amountPaid, balance.outstanding);
   const progress =
     invoice.status === "paid"
       ? 100
-      : invoice.status === "issued" && invoice.total > 0
-        ? Math.min(100, Math.round((balance.amountPaid / invoice.total) * 100))
+      : invoice.status === "issued" && invoice.balanceDue > 0
+        ? Math.min(100, Math.round((balance.amountPaid / invoice.balanceDue) * 100))
         : 0;
   const latest = payments[0];
 
@@ -237,7 +238,7 @@ function PaymentStatusCard({
           />
         </div>
         <p className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>{progress}% of the total</span>
+          <span>{progress}% of the balance due</span>
           {standing === "Paid" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 font-medium text-white">
               <Check className="size-3.5" strokeWidth={3} />

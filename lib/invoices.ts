@@ -33,6 +33,8 @@ type SummaryRow = {
   subtotal: number | string;
   gst_amount: number | string;
   total: number | string;
+  tds_amount: number | string;
+  balance_due: number | string;
   currency: string;
   beneficiary_id: string;
   beneficiaries: { legal_name: string } | { legal_name: string }[] | null;
@@ -57,6 +59,8 @@ function mapSummary(row: SummaryRow, paymentStanding: InvoicePaymentStanding): I
     subtotal: money(row.subtotal),
     gstAmount: money(row.gst_amount),
     total: money(row.total),
+    tdsAmount: money(row.tds_amount),
+    balanceDue: money(row.balance_due),
     currency: row.currency,
     status: isInvoiceStatus(row.status) ? row.status : "draft",
     paymentStanding,
@@ -181,7 +185,7 @@ export async function loadInvoices(raw: {
   let query = supabase
     .from("invoices")
     .select(
-      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, currency, beneficiary_id, beneficiaries(legal_name)",
+      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id, beneficiaries(legal_name)",
     )
     .limit(INVOICE_LIST_LIMIT + 1);
 
@@ -259,8 +263,10 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
     .from("invoices")
     .select(
       `id, invoice_number, beneficiary_id, bank_account_id, status, invoice_date, due_date,
-       bill_from, bill_to, currency, payment_terms, notes, gst_enabled, gst_rate,
-       subtotal, gst_amount, total, amount_in_words, issued_at, paid_at, cancelled_at, created_at,
+       bill_from, bill_to, place_of_supply, supply_state, state_code, client_gstin, deal_reference,
+       currency, payment_terms, notes, gst_enabled, gst_rate,
+       subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due,
+       amount_in_words, issued_at, paid_at, cancelled_at, created_at,
        beneficiaries ( legal_name, email ),
        bank_accounts ( id, account_holder_name, bank_name, account_number, ifsc_code, branch, is_default, is_active ),
        invoice_items ( id, position, hsn, description, quantity, rate, line_subtotal )`,
@@ -318,11 +324,21 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
     currency: data.currency,
     paymentTerms: data.payment_terms,
     notes: data.notes,
+    placeOfSupply: data.place_of_supply,
+    supplyState: data.supply_state,
+    stateCode: data.state_code,
+    clientGstin: data.client_gstin,
+    dealReference: data.deal_reference,
     gstEnabled: data.gst_enabled,
     gstRate: money(data.gst_rate),
     subtotal: money(data.subtotal),
+    cgstAmount: money(data.cgst_amount),
+    sgstAmount: money(data.sgst_amount),
+    igstAmount: money(data.igst_amount),
     gstAmount: money(data.gst_amount),
     total: money(data.total),
+    tdsAmount: money(data.tds_amount),
+    balanceDue: money(data.balance_due),
     amountInWords: data.amount_in_words,
     issuedAt: data.issued_at,
     paidAt: data.paid_at,

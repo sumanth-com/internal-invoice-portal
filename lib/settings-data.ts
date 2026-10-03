@@ -7,6 +7,7 @@ import {
   emptyCompanyProfile,
   mapBankAccount,
   mapCompanyProfile,
+  isFinancialYearPeriod,
   numberingFloor,
   sequenceSuffix,
   sortBankAccounts,
@@ -92,15 +93,17 @@ export async function loadPortalSettings(): Promise<PortalSettings> {
     ),
   );
 
-  const sequences = ((sequencesResult.data ?? []) as SequenceRow[]).map((row) =>
-    buildSequenceRow({
-      id: row.id,
-      period: row.period,
-      nextNumber: row.next_number,
-      updatedAt: row.updated_at,
-      suffixes: suffixesFor(row.period, invoices),
-    }),
-  );
+  const sequences = ((sequencesResult.data ?? []) as SequenceRow[])
+    .filter((row) => isFinancialYearPeriod(row.period))
+    .map((row) =>
+      buildSequenceRow({
+        id: row.id,
+        period: row.period,
+        nextNumber: row.next_number,
+        updatedAt: row.updated_at,
+        suffixes: suffixesFor(row.period, invoices),
+      }),
+    );
 
   const currentPeriod = currentNumberingPeriod();
   if (!sequences.some((row) => row.period === currentPeriod)) {

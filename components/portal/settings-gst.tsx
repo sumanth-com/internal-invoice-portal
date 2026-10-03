@@ -138,7 +138,7 @@ export function GstDefaultsSection({
   return (
     <SettingsSection
       title="GST defaults"
-      description="GST rate, currency, GSTIN, and PAN used when a new invoice is created. Currency follows the company country. Existing invoices keep the tax details already saved on them."
+      description="GST rate, currency, GSTIN, and PAN used when a new invoice is created. The company state decides CGST and SGST for supply in that state, or IGST for every other state. Existing invoices keep the tax details already saved on them."
     >
       <SettingsSaved show={savedVisible}>GST details saved.</SettingsSaved>
       <div className="grid gap-4">

@@ -30,8 +30,13 @@ export type ReportInvoice = {
   beneficiaryName: string;
   status: InvoiceStatus;
   subtotal: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
   gstAmount: number;
   total: number;
+  tdsAmount: number;
+  balanceDue: number;
   currency: string;
   amountPaid: number;
   outstanding: number;
@@ -67,7 +72,16 @@ export type ReportView = {
     outstanding: string;
     modes: { mode: PaymentMode; label: string; count: number; amount: string }[];
   };
-  gst: { subtotal: string; gst: string; total: string };
+  gst: {
+    subtotal: string;
+    cgst: string;
+    sgst: string;
+    igst: string;
+    gst: string;
+    total: string;
+    tds: string;
+    balanceDue: string;
+  };
   beneficiaries: {
     active: number;
     withInvoices: number;
@@ -346,8 +360,13 @@ export function buildReport(
   const beneficiaries = new Map<string, { id: string; name: string; count: number; value: number }>();
 
   let subtotal = 0;
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
   let gst = 0;
   let total = 0;
+  let tds = 0;
+  let balanceDue = 0;
   let amountPaid = 0;
   let outstanding = 0;
   let paymentCount = 0;
@@ -355,8 +374,13 @@ export function buildReport(
   for (const invoice of invoices) {
     if (!isInvoiceStatus(invoice.status)) continue;
     subtotal += invoice.subtotal;
+    cgst += invoice.cgstAmount;
+    sgst += invoice.sgstAmount;
+    igst += invoice.igstAmount;
     gst += invoice.gstAmount;
     total += invoice.total;
+    tds += invoice.tdsAmount;
+    balanceDue += invoice.balanceDue;
     amountPaid += invoice.amountPaid;
     outstanding += invoice.outstanding;
 
@@ -441,8 +465,13 @@ export function buildReport(
     },
     gst: {
       subtotal: moneyLabel(subtotal, currency),
+      cgst: moneyLabel(cgst, currency),
+      sgst: moneyLabel(sgst, currency),
+      igst: moneyLabel(igst, currency),
       gst: moneyLabel(gst, currency),
       total: moneyLabel(total, currency),
+      tds: moneyLabel(tds, currency),
+      balanceDue: moneyLabel(balanceDue, currency),
     },
     beneficiaries: {
       active: options.activeBeneficiaries,
@@ -481,8 +510,13 @@ export function reportCsv(invoices: ReportInvoice[]) {
     "Invoice date",
     "Beneficiary",
     "Subtotal",
-    "GST",
-    "Total",
+    "CGST",
+    "SGST",
+    "IGST",
+    "Total GST",
+    "Invoice total",
+    "TDS",
+    "Balance due",
     "Status",
     "Amount paid",
     "Outstanding",
@@ -500,8 +534,13 @@ export function reportCsv(invoices: ReportInvoice[]) {
         invoice.date,
         invoice.beneficiaryName,
         roundMoney(invoice.subtotal).toFixed(2),
+        roundMoney(invoice.cgstAmount).toFixed(2),
+        roundMoney(invoice.sgstAmount).toFixed(2),
+        roundMoney(invoice.igstAmount).toFixed(2),
         roundMoney(invoice.gstAmount).toFixed(2),
         roundMoney(invoice.total).toFixed(2),
+        roundMoney(invoice.tdsAmount).toFixed(2),
+        roundMoney(invoice.balanceDue).toFixed(2),
         statusLabel(invoice.status),
         roundMoney(invoice.amountPaid).toFixed(2),
         roundMoney(invoice.outstanding).toFixed(2),

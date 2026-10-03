@@ -2,7 +2,6 @@
 
 import {
   invoiceErrorMessage,
-  invoiceNumberPeriod,
   invoiceToRow,
   isInvoiceId,
   isInvoiceStatus,
@@ -38,6 +37,20 @@ export async function fetchInvoiceFormOptions(): Promise<InvoiceFormOptionsResul
       error: error instanceof Error ? error.message : "The invoice form could not be loaded.",
     };
   }
+}
+
+async function saveTds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  invoiceId: string,
+  tdsAmount: number,
+) {
+  if (!(tdsAmount > 0)) return null;
+  const updated = await supabase
+    .from("invoices")
+    .update({ tds_amount: tdsAmount })
+    .eq("id", invoiceId)
+    .eq("status", "draft");
+  return updated.error;
 }
 
 async function replaceItems(
@@ -82,7 +95,7 @@ export async function saveInvoice(
   }
 
   const supabase = await createClient();
-  let numberPeriod: string | undefined;
+  let invoiceNumber: string | undefined;
   if (editing) {
     const existing = await supabase
       .from("invoices")
@@ -94,10 +107,10 @@ export async function saveInvoice(
     if (existing.data.status !== "draft") {
       return denied("Only a draft invoice can be edited.");
     }
-    numberPeriod = invoiceNumberPeriod(existing.data.invoice_number);
+    invoiceNumber = existing.data.invoice_number;
   }
 
-  const parsed = parseInvoiceForm(formData, { numberPeriod });
+  const parsed = parseInvoiceForm(formData, { invoiceNumber });
   if (!parsed.ok) return { error: null, fieldErrors: parsed.fieldErrors };
 
   if (!editing) {
@@ -124,6 +137,12 @@ export async function saveInvoice(
       );
     }
 
+    const tdsError = await saveTds(supabase, created.data.id, parsed.value.tdsAmount);
+    if (tdsError) {
+      await supabase.from("invoices").delete().eq("id", created.data.id);
+      return denied(invoiceErrorMessage(tdsError, "TDS could not be saved."));
+    }
+
     revalidatePath("/invoices");
     revalidatePath("/dashboard");
     redirect(`/invoices/${created.data.id}?notice=saved`);
@@ -131,7 +150,7 @@ export async function saveInvoice(
 
   const updated = await supabase
     .from("invoices")
-    .update(invoiceToRow(parsed.value))
+    .update({ ...invoiceToRow(parsed.value), tds_amount: 0 })
     .eq("id", id)
     .eq("status", "draft")
     .select("id");
@@ -145,6 +164,11 @@ export async function saveInvoice(
   const itemError = await replaceItems(supabase, id, parsed.value.items);
   if (itemError) {
     return denied(invoiceErrorMessage(itemError, "The invoice lines could not be saved."));
+  }
+
+  const tdsError = await saveTds(supabase, id, parsed.value.tdsAmount);
+  if (tdsError) {
+    return denied(invoiceErrorMessage(tdsError, "TDS could not be saved."));
   }
 
   revalidatePath("/invoices");
