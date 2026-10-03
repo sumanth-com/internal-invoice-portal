@@ -3,10 +3,11 @@ import {
   formatBeneficiaryBillTo,
   formatCompanyBillFrom,
   INVOICE_LIST_LIMIT,
-  currentMonthRange,
   isInvoiceId,
+  isInvoicePaymentStanding,
   isInvoiceStatus,
   normalizeInvoiceDateFilter,
+  normalizeInvoicePaymentFilter,
   normalizeInvoiceSearch,
   normalizeInvoiceSort,
   normalizeInvoiceStatusFilter,
@@ -17,6 +18,7 @@ import {
   type InvoiceLine,
   type InvoiceListData,
   type InvoicePartyOption,
+  type InvoicePaymentStanding,
   type InvoiceSort,
   type InvoiceStatus,
   type InvoiceSummary,
@@ -46,7 +48,7 @@ function beneficiaryName(row: SummaryRow) {
   return record?.legal_name?.trim() || "—";
 }
 
-function mapSummary(row: SummaryRow): InvoiceSummary {
+function mapSummary(row: SummaryRow, paymentStanding: InvoicePaymentStanding): InvoiceSummary {
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
@@ -57,7 +59,16 @@ function mapSummary(row: SummaryRow): InvoiceSummary {
     total: money(row.total),
     currency: row.currency,
     status: isInvoiceStatus(row.status) ? row.status : "draft",
+    paymentStanding,
   };
+}
+
+function standingFor(status: InvoiceStatus, raw: string | undefined): InvoicePaymentStanding {
+  if (raw && isInvoicePaymentStanding(raw)) return raw;
+  if (status === "cancelled") return "cancelled";
+  if (status === "paid") return "paid";
+  if (status === "draft") return "draft";
+  return "unpaid";
 }
 
 function mapParty(row: {
@@ -129,15 +140,16 @@ async function countInvoices(
 export async function loadInvoices(raw: {
   q?: string;
   status?: string;
+  payment?: string;
   from?: string;
   to?: string;
   sort?: string;
 }): Promise<InvoiceListData> {
   const search = normalizeInvoiceSearch(raw.q);
   const status = normalizeInvoiceStatusFilter(raw.status);
-  const month = currentMonthRange();
-  const from = normalizeInvoiceDateFilter(raw.from) || month.from;
-  const to = normalizeInvoiceDateFilter(raw.to) || month.to;
+  const payment = normalizeInvoicePaymentFilter(raw.payment);
+  const from = normalizeInvoiceDateFilter(raw.from);
+  const to = normalizeInvoiceDateFilter(raw.to);
   const sort: InvoiceSort = normalizeInvoiceSort(raw.sort);
   const supabase = await createClient();
 
@@ -151,6 +163,21 @@ export async function loadInvoices(raw: {
     beneficiaryIds = (data ?? []).map((row) => row.id);
   }
 
+  let paymentIds: string[] | null = null;
+  if (payment !== "all") {
+    const { data, error } = await supabase
+      .from("invoice_balances")
+      .select("invoice_id")
+      .eq("payment_status", payment);
+    if (error) throw error;
+    paymentIds = (data ?? []).map((row) => row.invoice_id);
+  }
+
+  if (paymentIds && paymentIds.length === 0) {
+    const total = await countInvoices(supabase);
+    return { invoices: [], total, search, status, payment, from, to, sort, truncated: false };
+  }
+
   let query = supabase
     .from("invoices")
     .select(
@@ -158,6 +185,7 @@ export async function loadInvoices(raw: {
     )
     .limit(INVOICE_LIST_LIMIT + 1);
 
+  if (paymentIds) query = query.in("id", paymentIds);
   if (status !== "all") query = query.eq("status", status);
   if (from) query = query.gte("invoice_date", from);
   if (to) query = query.lte("invoice_date", to);
@@ -192,11 +220,31 @@ export async function loadInvoices(raw: {
   }
 
   const truncated = rows.length > INVOICE_LIST_LIMIT;
+  const visible = truncated ? rows.slice(0, INVOICE_LIST_LIMIT) : rows;
+  const standings = new Map<string, string>();
+  if (visible.length > 0) {
+    const { data: balances, error: balanceError } = await supabase
+      .from("invoice_balances")
+      .select("invoice_id, payment_status")
+      .in(
+        "invoice_id",
+        visible.map((row) => row.id),
+      );
+    if (balanceError) throw balanceError;
+    for (const balance of balances ?? []) {
+      standings.set(balance.invoice_id, balance.payment_status);
+    }
+  }
+
   return {
-    invoices: (truncated ? rows.slice(0, INVOICE_LIST_LIMIT) : rows).map(mapSummary),
+    invoices: visible.map((row) => {
+      const invoiceStatus = isInvoiceStatus(row.status) ? row.status : "draft";
+      return mapSummary(row, standingFor(invoiceStatus, standings.get(row.id)));
+    }),
     total,
     search,
     status,
+    payment,
     from,
     to,
     sort,

@@ -115,6 +115,10 @@ export const emptyPartyFields: InvoicePartyFields = {
   phone: "",
 };
 
+export type InvoicePaymentStanding = "draft" | "cancelled" | "unpaid" | "partial" | "paid";
+
+export type InvoicePaymentFilter = "all" | "unpaid" | "partial" | "paid";
+
 export type InvoiceSummary = {
   id: string;
   invoiceNumber: string;
@@ -125,6 +129,7 @@ export type InvoiceSummary = {
   total: number;
   currency: string;
   status: InvoiceStatus;
+  paymentStanding: InvoicePaymentStanding;
 };
 
 export type InvoiceListData = {
@@ -132,6 +137,7 @@ export type InvoiceListData = {
   total: number;
   search: string;
   status: InvoiceStatus | "all";
+  payment: InvoicePaymentFilter;
   from: string;
   to: string;
   sort: InvoiceSort;
@@ -209,6 +215,25 @@ export function normalizeInvoiceStatusFilter(value: string | undefined) {
   return "all" as const;
 }
 
+const PAYMENT_FILTERS: InvoicePaymentFilter[] = ["unpaid", "partial", "paid"];
+
+export function normalizeInvoicePaymentFilter(value: string | undefined): InvoicePaymentFilter {
+  if (value && PAYMENT_FILTERS.includes(value as InvoicePaymentFilter)) return value as InvoicePaymentFilter;
+  return "all";
+}
+
+export function isInvoicePaymentStanding(value: string): value is InvoicePaymentStanding {
+  return value === "draft" || value === "cancelled" || value === "unpaid" || value === "partial" || value === "paid";
+}
+
+export function paymentStandingLabel(standing: InvoicePaymentStanding) {
+  if (standing === "unpaid") return "Pending";
+  if (standing === "partial") return "Partially Paid";
+  if (standing === "paid") return "Paid";
+  if (standing === "cancelled") return "Cancelled";
+  return "Draft";
+}
+
 export function normalizeInvoiceSort(value: string | undefined): InvoiceSort {
   if (value && SORTS.includes(value as InvoiceSort)) return value as InvoiceSort;
   return "date_desc";
@@ -222,6 +247,7 @@ export function normalizeInvoiceDateFilter(value: string | undefined) {
 export function invoiceListHref(options: {
   search?: string;
   status?: InvoiceStatus | "all";
+  payment?: InvoicePaymentFilter;
   from?: string;
   to?: string;
   sort?: InvoiceSort;
@@ -230,6 +256,7 @@ export function invoiceListHref(options: {
   const search = options.search?.trim();
   if (search) params.set("q", search);
   if (options.status && options.status !== "all") params.set("status", options.status);
+  if (options.payment && options.payment !== "all") params.set("payment", options.payment);
   if (options.from) params.set("from", options.from);
   if (options.to) params.set("to", options.to);
   if (options.sort && options.sort !== "date_desc") params.set("sort", options.sort);
@@ -289,6 +316,17 @@ export function statusLabel(status: InvoiceStatus) {
   if (status === "issued") return "Issued";
   if (status === "paid") return "Paid";
   return "Cancelled";
+}
+
+export function paymentStandingAfterStatusChange(
+  current: InvoicePaymentStanding,
+  next: InvoiceStatus,
+): InvoicePaymentStanding {
+  if (next === "cancelled") return "cancelled";
+  if (next === "paid") return "paid";
+  if (next === "draft") return "draft";
+  if (current === "draft" || current === "cancelled") return "unpaid";
+  return current;
 }
 
 export function formatInvoiceDate(value: string) {

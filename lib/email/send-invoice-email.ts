@@ -22,6 +22,14 @@ export type SendInvoiceEmailResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
+function invoiceEmailError(message: string | undefined) {
+  const text = message?.trim();
+  if (!text || /re_[A-Za-z0-9]|api[_ -]?key/i.test(text)) {
+    return "The invoice email could not be sent.";
+  }
+  return text;
+}
+
 function pdfFileName(fileName: string, invoiceNumber: string) {
   const cleaned = fileName.replace(/[^A-Za-z0-9._-]/g, "");
   if (cleaned.toLowerCase().endsWith(".pdf")) return cleaned;
@@ -42,8 +50,14 @@ export async function sendInvoiceEmail(
 
   const resend = createResendClient();
   const from = resendFromAddress();
-  if (!resend || !from) {
-    return { ok: false, error: "Email sending is not configured." };
+  if (!resend && !from) {
+    return { ok: false, error: "Email sending is not configured. RESEND_API_KEY and RESEND_FROM_EMAIL are missing." };
+  }
+  if (!resend) {
+    return { ok: false, error: "Email sending is not configured. RESEND_API_KEY is missing." };
+  }
+  if (!from) {
+    return { ok: false, error: "Email sending is not configured. RESEND_FROM_EMAIL is missing." };
   }
 
   const content = renderInvoiceEmail(input);
@@ -71,7 +85,7 @@ export async function sendInvoiceEmail(
 
   if (sent.error || !sent.data?.id) {
     console.error("Invoice email failed", sent.error?.name, sent.error?.message);
-    return { ok: false, error: "The invoice email could not be sent." };
+    return { ok: false, error: invoiceEmailError(sent.error?.message) };
   }
 
   return { ok: true, id: sent.data.id };

@@ -5,9 +5,11 @@ import {
   invoiceNumberPeriod,
   invoiceToRow,
   isInvoiceId,
+  isInvoiceStatus,
   parseInvoiceForm,
   type InvoiceFormState,
   type InvoiceMutationState,
+  type InvoiceStatus,
 } from "@/lib/invoice";
 import { loadInvoiceFormOptions } from "@/lib/invoices";
 import { getPortalUser } from "@/lib/portal-user";
@@ -223,6 +225,43 @@ export async function cancelInvoice(
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/dashboard");
   redirect(`/invoices/${id}?notice=cancelled`);
+}
+
+export async function setInvoiceStatus(
+  id: string,
+  status: InvoiceStatus,
+): Promise<{ ok: true; status: InvoiceStatus } | { ok: false; error: string }> {
+  const user = await getPortalUser();
+  if (!user?.isActive) {
+    return { ok: false, error: "You do not have permission to change this invoice." };
+  }
+  if (!isInvoiceId(id) || !isInvoiceStatus(status)) {
+    return { ok: false, error: "This invoice was not found." };
+  }
+
+  const supabase = await createClient();
+  const existing = await supabase.from("invoices").select("status").eq("id", id).maybeSingle();
+  if (existing.error) return { ok: false, error: "The invoice status could not be changed." };
+  if (!existing.data || !isInvoiceStatus(existing.data.status)) {
+    return { ok: false, error: "This invoice was not found." };
+  }
+
+  const current = existing.data.status;
+  if (current === status) return { ok: true, status };
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .update({ status })
+    .eq("id", id)
+    .eq("status", current)
+    .select("id");
+  if (error) return { ok: false, error: invoiceErrorMessage(error, "The invoice status could not be changed.") };
+  if (!data?.length) return { ok: false, error: "The invoice status could not be changed." };
+
+  revalidatePath("/invoices");
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath("/dashboard");
+  return { ok: true, status };
 }
 
 export async function deleteDraftInvoice(

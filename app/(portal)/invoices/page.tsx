@@ -25,6 +25,7 @@ async function InvoicesContent({ searchParams }: { searchParams: SearchParams })
       loadInvoices({
         q: read("q"),
         status: read("status"),
+        payment: read("payment"),
         from: read("from"),
         to: read("to"),
         sort: read("sort"),
