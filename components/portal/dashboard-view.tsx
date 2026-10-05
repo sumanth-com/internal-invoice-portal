@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
 const panelActionClass =
-  "size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800 dark:border-white/15 dark:bg-white/10 dark:text-white dark:shadow-none dark:hover:bg-white/20 dark:hover:text-white";
+  "size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800 dark:border-primary dark:bg-primary dark:text-white dark:shadow-none dark:hover:bg-primary/90 dark:hover:text-white";
 
 const detailPanelClass =
   "relative overflow-hidden rounded-[28px] border border-violet-100 text-foreground shadow-sm dark:border-violet-900/40 dark:text-white";
