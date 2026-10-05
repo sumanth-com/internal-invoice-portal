@@ -28,6 +28,7 @@ export type DashboardData = {
   draft: number;
   issued: number;
   paid: number;
+  cancelled: number;
   beneficiaryCount: number;
   invoices: DashboardInvoice[];
   search: string;
@@ -94,6 +95,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     countInvoices(supabase, "draft"),
     countInvoices(supabase, "issued"),
     countInvoices(supabase, "paid"),
+    countInvoices(supabase, "cancelled"),
     supabase
       .from("beneficiaries")
       .select("id", { count: "exact", head: true })
@@ -133,7 +135,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     invoiceQuery = invoiceQuery.or(filters.join(","));
   }
 
-  const [{ data, error }, [total, draft, issued, paid, beneficiaryCount]] =
+  const [{ data, error }, [total, draft, issued, paid, cancelled, beneficiaryCount]] =
     await Promise.all([invoiceQuery, counts]);
 
   if (error) throw error;
@@ -172,6 +174,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     draft,
     issued,
     paid,
+    cancelled,
     beneficiaryCount,
     search,
     truncated,

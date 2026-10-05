@@ -11,10 +11,10 @@ export const metadata = {
 function DashboardFallback() {
   return (
     <>
-      <StatCardsSkeleton count={4} />
-      <div className="grid overflow-hidden rounded-[28px] lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
-        <div className="h-80 animate-pulse bg-muted" />
-        <div className="h-80 animate-pulse bg-primary/30" />
+      <StatCardsSkeleton count={5} />
+      <div className="grid gap-4 lg:grid-cols-[minmax(20rem,28rem)_minmax(0,1fr)]">
+        <div className="h-80 animate-pulse rounded-[28px] bg-muted" />
+        <div className="h-80 animate-pulse rounded-[28px] bg-violet-100" />
       </div>
       <p className="sr-only" role="status">
         Loading invoices…

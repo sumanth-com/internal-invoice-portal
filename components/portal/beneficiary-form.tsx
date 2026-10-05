@@ -5,6 +5,7 @@ import {
   updateBeneficiary,
 } from "@/app/(portal)/beneficiaries/actions";
 import { ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
 import {
   emptyBeneficiaryFormState,
   type Beneficiary,
@@ -119,6 +120,7 @@ export function BeneficiaryForm({
     FormData
   >(action, emptyBeneficiaryFormState);
   const errors = state.fieldErrors;
+  useActionToast(state, state.error, "error");
   const handled = useRef<BeneficiaryFormState | null>(null);
   const { setBusy, setDirty } = modal;
 
@@ -154,15 +156,6 @@ export function BeneficiaryForm({
 
       <ModalBody>
         <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
-          {state.error ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            >
-              {state.error}
-            </p>
-          ) : null}
-
           <Section title="Company">
             <Field
               id="legal_name"
@@ -180,7 +173,7 @@ export function BeneficiaryForm({
                 data-autofocus
               />
             </Field>
-            <Field id="contact_name" label="Contact person name" error={errors.contact_name}>
+            <Field id="contact_name" label="Client legal name" error={errors.contact_name}>
               <Input
                 {...textProps("contact_name", errors.contact_name)}
                 defaultValue={beneficiary?.contactName ?? ""}

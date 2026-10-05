@@ -5,6 +5,7 @@ import {
   deleteDraftInvoice,
   issueInvoice,
 } from "@/app/(portal)/invoices/actions";
+import { useActionToast } from "@/components/portal/toasts";
 import type { InvoiceMutationState } from "@/lib/invoice";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,15 +22,11 @@ export function IssueInvoiceButton({
   disabled: boolean;
 }) {
   const [state, action, pending] = useActionState(issueInvoice, initialState);
+  useActionToast(state, state.error, "error");
 
   return (
     <form action={action} className="flex flex-col items-start gap-2">
       <input type="hidden" name="id" value={id} />
-      {state.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {state.error}
-        </p>
-      ) : null}
       <Button type="submit" disabled={disabled || pending}>
         <Send />
         {pending ? "Issuing…" : "Issue invoice"}
@@ -41,6 +38,7 @@ export function IssueInvoiceButton({
 export function CancelInvoiceButton({ id, number }: { id: string; number: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(cancelInvoice, initialState);
+  useActionToast(state, state.error, "error");
 
   if (!open) {
     return (
@@ -58,11 +56,6 @@ export function CancelInvoiceButton({ id, number }: { id: string; number: string
       <p className="mt-1 text-sm text-muted-foreground">
         A cancelled invoice cannot be changed.
       </p>
-      {state.error ? (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {state.error}
-        </p>
-      ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button type="submit" variant="destructive" disabled={pending}>
           {pending ? "Cancelling…" : "Cancel invoice"}
@@ -89,6 +82,7 @@ export function DeleteDraftDialog({
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [state, formAction, pending] = useActionState(deleteDraftInvoice, initialState);
+  useActionToast(state, state.error, "error");
   const lock = useRef(false);
   const submittedFor = useRef<string | null>(null);
   const [shown, setShown] = useState(id ? { id, number } : null);
@@ -158,11 +152,6 @@ export function DeleteDraftDialog({
         <p className="mt-1 text-sm text-muted-foreground">
           This removes the draft permanently. Issued invoices cannot be deleted.
         </p>
-        {state.error && submittedFor.current === shown.id ? (
-          <p role="alert" className="mt-3 text-sm text-destructive">
-            {state.error}
-          </p>
-        ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button ref={cancelRef} type="button" variant="outline" disabled={pending} onClick={onClose}>
             Keep draft

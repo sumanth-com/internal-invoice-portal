@@ -1,6 +1,7 @@
 import {
   BENEFICIARY_LIST_LIMIT,
   isBeneficiaryId,
+  normalizeBeneficiaryContact,
   normalizeBeneficiarySearch,
   normalizeBeneficiaryStatus,
   type Beneficiary,
@@ -86,9 +87,11 @@ async function countBeneficiaries(
 export async function loadBeneficiaries(
   rawSearch: string | undefined,
   rawStatus: string | undefined,
+  rawContact: string | undefined,
 ): Promise<BeneficiaryListData> {
   const search = normalizeBeneficiarySearch(rawSearch);
   const status: BeneficiaryStatusFilter = normalizeBeneficiaryStatus(rawStatus);
+  const contact = normalizeBeneficiaryContact(rawContact);
   const supabase = await createClient();
 
   let listQuery = supabase
@@ -99,6 +102,13 @@ export async function loadBeneficiaries(
 
   if (status === "active") listQuery = listQuery.eq("is_active", true);
   if (status === "inactive") listQuery = listQuery.eq("is_active", false);
+  if (contact) listQuery = listQuery.eq("contact_name", contact);
+
+  const namesQuery = supabase
+    .from("beneficiaries")
+    .select("contact_name")
+    .not("contact_name", "is", null)
+    .order("contact_name", { ascending: true });
 
   if (search) {
     const pattern = `"%${search.replaceAll('"', "")}%"`;
@@ -115,17 +125,26 @@ export async function loadBeneficiaries(
     );
   }
 
-  const [{ data, error }, active, inactive] = await Promise.all([
+  const [{ data, error }, namesResult, active, inactive] = await Promise.all([
     listQuery,
+    namesQuery,
     countBeneficiaries(supabase, true),
     countBeneficiaries(supabase, false),
   ]);
 
   if (error) throw error;
+  if (namesResult.error) throw namesResult.error;
   const total = active + inactive;
 
   const rows = data ?? [];
   const truncated = rows.length > BENEFICIARY_LIST_LIMIT;
+  const contactNames = [
+    ...new Set(
+      (namesResult.data ?? [])
+        .map((row) => row.contact_name?.trim() ?? "")
+        .filter((name) => name.length > 0),
+    ),
+  ];
 
   return {
     beneficiaries: (truncated ? rows.slice(0, BENEFICIARY_LIST_LIMIT) : rows).map(
@@ -136,6 +155,8 @@ export async function loadBeneficiaries(
     inactive,
     search,
     status,
+    contact,
+    contactNames,
     truncated,
   };
 }
@@ -152,6 +173,17 @@ export async function loadBeneficiary(id: string): Promise<Beneficiary | null> {
 
   if (error) throw error;
   return data ? mapBeneficiary(data) : null;
+}
+
+export async function invoiceBeneficiaryIds() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("invoices").select("beneficiary_id");
+  if (error) throw error;
+  return new Set(
+    (data ?? [])
+      .map((row) => row.beneficiary_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
 }
 
 export async function beneficiaryIdsOnInvoices(ids: string[]) {

@@ -6,6 +6,8 @@ import {
   isInvoiceId,
   isInvoicePaymentStanding,
   isInvoiceStatus,
+  invoiceNumberSearchTerms,
+  normalizeInvoiceBeneficiary,
   normalizeInvoiceDateFilter,
   normalizeInvoicePaymentFilter,
   normalizeInvoiceSearch,
@@ -143,6 +145,7 @@ async function countInvoices(
 
 export async function loadInvoices(raw: {
   q?: string;
+  beneficiary?: string;
   status?: string;
   payment?: string;
   from?: string;
@@ -150,12 +153,17 @@ export async function loadInvoices(raw: {
   sort?: string;
 }): Promise<InvoiceListData> {
   const search = normalizeInvoiceSearch(raw.q);
+  const beneficiary = normalizeInvoiceBeneficiary(raw.beneficiary);
   const status = normalizeInvoiceStatusFilter(raw.status);
   const payment = normalizeInvoicePaymentFilter(raw.payment);
   const from = normalizeInvoiceDateFilter(raw.from);
   const to = normalizeInvoiceDateFilter(raw.to);
   const sort: InvoiceSort = normalizeInvoiceSort(raw.sort);
   const supabase = await createClient();
+  const beneficiaryOptions = supabase
+    .from("beneficiaries")
+    .select("id, legal_name")
+    .order("legal_name", { ascending: true });
 
   let beneficiaryIds: string[] = [];
   if (search) {
@@ -178,8 +186,21 @@ export async function loadInvoices(raw: {
   }
 
   if (paymentIds && paymentIds.length === 0) {
-    const total = await countInvoices(supabase);
-    return { invoices: [], total, search, status, payment, from, to, sort, truncated: false };
+    const [total, options] = await Promise.all([countInvoices(supabase), beneficiaryOptions]);
+    if (options.error) throw options.error;
+    return {
+      invoices: [],
+      total,
+      search,
+      beneficiary,
+      beneficiaries: mapBeneficiaryOptions(options.data),
+      status,
+      payment,
+      from,
+      to,
+      sort,
+      truncated: false,
+    };
   }
 
   let query = supabase
@@ -190,12 +211,14 @@ export async function loadInvoices(raw: {
     .limit(INVOICE_LIST_LIMIT + 1);
 
   if (paymentIds) query = query.in("id", paymentIds);
+  if (beneficiary) query = query.eq("beneficiary_id", beneficiary);
   if (status !== "all") query = query.eq("status", status);
   if (from) query = query.gte("invoice_date", from);
   if (to) query = query.lte("invoice_date", to);
   if (search) {
-    const pattern = `"%${search.replaceAll('"', "")}%"`;
-    const filters = [`invoice_number.ilike.${pattern}`];
+    const filters = invoiceNumberSearchTerms(search).map(
+      (term) => `invoice_number.ilike.${quotedLike(term)}`,
+    );
     if (beneficiaryIds.length > 0) {
       filters.push(`beneficiary_id.in.(${beneficiaryIds.join(",")})`);
     }
@@ -213,8 +236,13 @@ export async function loadInvoices(raw: {
     query = query.order("invoice_number", { ascending: true });
   }
 
-  const [{ data, error }, total] = await Promise.all([query, countInvoices(supabase)]);
+  const [{ data, error }, total, options] = await Promise.all([
+    query,
+    countInvoices(supabase),
+    beneficiaryOptions,
+  ]);
   if (error) throw error;
+  if (options.error) throw options.error;
 
   let rows = (data ?? []) as SummaryRow[];
   if (sort === "beneficiary_asc") {
@@ -247,6 +275,8 @@ export async function loadInvoices(raw: {
     }),
     total,
     search,
+    beneficiary,
+    beneficiaries: mapBeneficiaryOptions(options.data),
     status,
     payment,
     from,
@@ -254,6 +284,16 @@ export async function loadInvoices(raw: {
     sort,
     truncated,
   };
+}
+
+function quotedLike(value: string) {
+  return `"%${value.replaceAll('"', "")}%"`;
+}
+
+function mapBeneficiaryOptions(
+  rows: { id: string; legal_name: string }[] | null,
+) {
+  return (rows ?? []).map((row) => ({ id: row.id, name: row.legal_name }));
 }
 
 export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
@@ -369,7 +409,7 @@ export async function loadInvoiceFormOptions(selected?: {
     supabase
       .from("company_settings")
       .select(
-        "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, gstin, pan, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate",
+        "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, gstin, pan, cin, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate",
       )
       .maybeSingle(),
   ]);
@@ -405,6 +445,7 @@ export async function loadInvoiceFormOptions(selected?: {
         phone: company.phone,
         gstin: company.gstin,
         pan: company.pan,
+        cin: company.cin,
       })
     : emptyPartyFields;
   const defaults: CompanyInvoiceDefaults = {
@@ -422,6 +463,7 @@ export async function loadInvoiceFormOptions(selected?: {
           phone: company.phone,
           gstin: company.gstin,
           pan: company.pan,
+          cin: company.cin,
         })
       : "",
     fromParty,

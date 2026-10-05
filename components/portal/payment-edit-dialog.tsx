@@ -2,6 +2,7 @@
 
 import { deletePayment, updatePayment } from "@/app/(portal)/payments/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
 import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ function EditPaymentForm({
   const lock = useRef(false);
   const { setBusy, setDirty } = modal;
   const errors = state.fieldErrors;
+  useActionToast(state, state.error, "error");
   const [mode, setMode] = useState(payment.paymentMode);
 
   useEffect(() => {
@@ -73,11 +75,6 @@ function EditPaymentForm({
       <input type="hidden" name="payment_mode" value={mode} />
       <ModalBody>
         <fieldset disabled={pending} className="grid gap-3 p-4 sm:grid-cols-2">
-          {state.error ? (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:col-span-2">
-              {state.error}
-            </p>
-          ) : null}
           <div className="flex flex-col gap-2">
             <Label htmlFor={`edit-invoice-${payment.id}`}>Invoice</Label>
             <Input
@@ -232,6 +229,7 @@ export function DeletePaymentDialog({
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [state, formAction, pending] = useActionState(deletePayment, emptyDeleteState);
+  useActionToast(state, state.error, "error");
   const handled = useRef<PaymentDeleteState | null>(null);
   const lock = useRef(false);
   const submittedFor = useRef<string | null>(null);
@@ -312,11 +310,6 @@ export function DeletePaymentDialog({
           invoice {shown.invoiceNumber} for {shown.beneficiaryName}. The invoice balance will update. This cannot be
           undone.
         </p>
-        {state.error && submittedFor.current === shown.id ? (
-          <p role="alert" className="mt-3 text-sm text-destructive">
-            {state.error}
-          </p>
-        ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button ref={cancelRef} type="button" variant="outline" disabled={pending} onClick={onClose}>
             Cancel

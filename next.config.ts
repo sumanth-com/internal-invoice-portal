@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  experimental: {
+    // Dynamic pages expire immediately by default, so every section click
+    // discards the prefetch and waits on Supabase behind the page skeleton.
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
+  },
   serverExternalPackages: ["@react-pdf/renderer"],
   outputFileTracingIncludes: {
     "/invoices/[id]/pdf": ["./lib/pdf/fonts/**"],

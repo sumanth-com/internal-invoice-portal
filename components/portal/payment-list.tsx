@@ -8,6 +8,7 @@ import { usePortalModals } from "@/components/portal/portal-modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { datesAreCurrentMonth, formatInvoiceDate, formatMoney } from "@/lib/invoice";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import {
   PAYMENT_LIST_LIMIT,
   PAYMENT_MODES,
@@ -145,6 +146,7 @@ export function PaymentList({
     setData((current) => applySaved(current, saved.payment));
     setPayable((current) => applyBalance(current, saved));
     notify(message);
+    if (saved.invoiceStatus === "paid") requestNotificationRefresh();
     startTransition(() => router.refresh());
   }
 
@@ -260,18 +262,18 @@ export function PaymentList({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
               <thead className="sticky top-0 z-10">
-                <tr className="text-left text-xs text-muted-foreground">
-                  <th className="border-b bg-muted px-4 py-3 font-medium">Invoice</th>
-                  <th className="border-b bg-muted px-4 py-3 font-medium">Beneficiary</th>
-                  <th className="border-b bg-muted px-4 py-3 font-medium whitespace-nowrap">Payment date</th>
-                  <th className="border-b bg-muted px-4 py-3 font-medium">Mode</th>
-                  <th className="border-b bg-muted px-4 py-3 font-medium">Reference / UTR</th>
-                  <th className="border-b bg-muted px-4 py-3 text-right font-medium">Amount</th>
-                  <th className="border-b bg-muted px-4 py-3 font-medium whitespace-nowrap">Created by</th>
-                  <th className="border-b bg-muted px-4 py-3 text-right font-medium">
+                <tr className="text-center text-xs text-primary-foreground">
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Invoice</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Beneficiary</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Payment date</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Mode</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Reference / UTR</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Amount</th>
+                  <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Created by</th>
+                  <th className="w-24 border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -279,21 +281,21 @@ export function PaymentList({
               <tbody>
                 {data.payments.map((payment) => (
                   <tr key={payment.id} className="hover:bg-muted/40">
-                    <td className="border-b px-4 py-3 font-medium whitespace-nowrap">
+                    <td className="border-b px-3 py-3 text-center align-middle font-medium">
                       <Link href={`/invoices/${payment.invoiceId}`} className="underline-offset-4 hover:underline">
                         {payment.invoiceNumber}
                       </Link>
                     </td>
-                    <td className="border-b px-4 py-3">{payment.beneficiaryName}</td>
-                    <td className="border-b px-4 py-3 whitespace-nowrap">{formatInvoiceDate(payment.paymentDate)}</td>
-                    <td className="border-b px-4 py-3 whitespace-nowrap">{paymentModeLabel(payment.paymentMode)}</td>
-                    <td className="border-b px-4 py-3">{payment.reference?.trim() || "—"}</td>
-                    <td className="border-b px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                    <td className="border-b px-3 py-3 text-center align-middle">{payment.beneficiaryName}</td>
+                    <td className="border-b px-3 py-3 text-center align-middle">{formatInvoiceDate(payment.paymentDate)}</td>
+                    <td className="border-b px-3 py-3 text-center align-middle">{paymentModeLabel(payment.paymentMode)}</td>
+                    <td className="border-b px-3 py-3 text-center align-middle break-words">{payment.reference?.trim() || "—"}</td>
+                    <td className="border-b px-3 py-3 text-center align-middle tabular-nums">
                       {formatMoney(payment.amount, payment.currency)}
                     </td>
-                    <td className="border-b px-4 py-3">{payment.createdByName}</td>
-                    <td className="border-b px-4 py-3">
-                      <div className="flex justify-end gap-1">
+                    <td className="border-b px-3 py-3 text-center align-middle">{payment.createdByName}</td>
+                    <td className="border-b px-3 py-3 text-center align-middle">
+                      <div className="flex justify-center gap-1">
                         <IconAction label="Edit" onClick={() => setEditing(payment)}>
                           <Pencil />
                         </IconAction>

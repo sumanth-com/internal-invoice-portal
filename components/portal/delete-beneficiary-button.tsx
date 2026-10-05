@@ -1,6 +1,7 @@
 "use client";
 
 import { deleteBeneficiary } from "@/app/(portal)/beneficiaries/actions";
+import { useActionToast } from "@/components/portal/toasts";
 import { Button } from "@/components/ui/button";
 import type { BeneficiaryMutationState } from "@/lib/beneficiary";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function DeleteBeneficiaryDialog({
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [state, formAction, pending] = useActionState(deleteBeneficiary, initialState);
+  useActionToast(state, state.error, "error");
   const lock = useRef(false);
   const submittedFor = useRef<string | null>(null);
   const [shown, setShown] = useState(id ? { id, name } : null);
@@ -91,11 +93,6 @@ export function DeleteBeneficiaryDialog({
         <p className="mt-1 text-sm text-muted-foreground">
           This removes the beneficiary permanently. Beneficiaries used on invoices cannot be deleted.
         </p>
-        {state.error && submittedFor.current === shown.id ? (
-          <p role="alert" className="mt-3 text-sm text-destructive">
-            {state.error}
-          </p>
-        ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button ref={cancelRef} type="button" variant="outline" disabled={pending} onClick={onClose}>
             Cancel

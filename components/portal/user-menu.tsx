@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/portal/toasts";
 import { createClient } from "@/lib/supabase/client";
 import { displayName, roleLabel, userInitials, type PortalUser } from "@/lib/portal";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export function UserMenu({ user }: { user: PortalUser }) {
   const [mounted, setMounted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useActionToast(error, error, "error");
   const titleId = useId();
 
   useEffect(() => {
@@ -67,7 +69,7 @@ export function UserMenu({ user }: { user: PortalUser }) {
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuContent side="bottom" align="end" sideOffset={8} className="w-72">
           <div className="px-2 py-2">
             <p className="truncate text-sm font-medium">{name}</p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.email}</p>
@@ -133,11 +135,6 @@ export function UserMenu({ user }: { user: PortalUser }) {
             <h2 id={titleId} className="text-base font-semibold">
               Are you sure you want to sign out?
             </h2>
-            {error ? (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {error}
-              </p>
-            ) : null}
             <div className="mt-5 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setConfirming(false)}>
                 Cancel

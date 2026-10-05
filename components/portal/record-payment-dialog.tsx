@@ -2,6 +2,7 @@
 
 import { recordPayment } from "@/app/(portal)/payments/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
 import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,7 @@ function RecordPaymentForm({
   const { setBusy, setDirty } = modal;
   const selected = invoices.find((invoice) => invoice.id === invoiceId) ?? null;
   const errors = state.fieldErrors;
+  useActionToast(state, state.error, "error");
 
   useEffect(() => {
     setBusy(pending);
@@ -89,12 +91,6 @@ function RecordPaymentForm({
       <input type="hidden" name="invoice_id" value={presetId || invoiceId} />
       <ModalBody>
         <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
-          {state.error ? (
-            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {state.error}
-            </p>
-          ) : null}
-
           <div className="flex flex-col gap-2">
             <Label htmlFor="payment-invoice">Invoice</Label>
             <ChoiceSelect

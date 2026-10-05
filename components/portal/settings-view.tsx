@@ -44,6 +44,7 @@ export function SettingsView({
             defaultGstRate: profile.defaultGstRate,
             gstin: profile.gstin,
             pan: profile.pan,
+            cin: profile.cin,
           }}
           currency={profile.defaultCurrency}
           country={profile.country}

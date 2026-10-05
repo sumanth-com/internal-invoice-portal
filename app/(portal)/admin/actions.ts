@@ -1,6 +1,7 @@
 "use server";
 
 import { sendInviteEmail } from "@/lib/email/send-invite-email";
+import { recordInviteNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { invitationAccessFor } from "@/lib/portal-user-data";
 import {
@@ -46,6 +47,28 @@ function inviteError(message: string) {
   return "The user could not be invited.";
 }
 
+async function discardInvite(userId: string) {
+  const admin = createAdminClient();
+  if (!admin) return;
+  const removed = await admin.auth.admin.deleteUser(userId);
+  if (removed.error) {
+    console.error("Pending invitation could not be removed", removed.error.message);
+  }
+}
+
+async function pendingInviteId(email: string) {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+  const found = listed.data.users.find((user) => user.email?.toLowerCase() === email);
+  if (!found) return null;
+  const pending =
+    (found.app_metadata as { invitation_pending?: unknown } | undefined)?.invitation_pending ===
+    true;
+  if (found.email_confirmed_at && !pending) return null;
+  return found.id;
+}
+
 async function invitationLink(email: string, fullName: string) {
   const admin = createAdminClient();
   if (!admin) {
@@ -81,6 +104,31 @@ async function invitationLink(email: string, fullName: string) {
   };
 }
 
+async function activationLink(email: string) {
+  const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false as const, error: "User invites are not configured on the server." };
+  }
+
+  const origin = await requestOrigin();
+  const linked = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: {
+      redirectTo: `${origin}/auth/confirm`,
+    },
+  });
+  const token = linked.data?.properties?.hashed_token;
+  if (linked.error || !token) {
+    return { ok: false as const, error: "The invitation link could not be prepared." };
+  }
+
+  return {
+    ok: true as const,
+    acceptUrl: `${origin}/auth/confirm?token_hash=${encodeURIComponent(token)}&type=recovery`,
+  };
+}
+
 async function activeAdminCount(
   supabase: Awaited<ReturnType<typeof createClient>>,
   exceptId: string,
@@ -107,7 +155,13 @@ export async function invitePortalUser(
   const parsed = parseInviteForm(formData);
   if (!parsed.ok) return { error: null, fieldErrors: parsed.fieldErrors };
 
-  const invited = await invitationLink(parsed.email, parsed.fullName);
+  let invited = await invitationLink(parsed.email, parsed.fullName);
+  if (!invited.ok && invited.error === "A user with this email already exists.") {
+    const pendingId = await pendingInviteId(parsed.email);
+    if (!pendingId) return { ...emptyPortalUserFormState, error: invited.error };
+    await discardInvite(pendingId);
+    invited = await invitationLink(parsed.email, parsed.fullName);
+  }
   if (!invited.ok) {
     return { ...emptyPortalUserFormState, error: invited.error };
   }
@@ -118,16 +172,13 @@ export async function invitePortalUser(
     .select(PROFILE_COLUMNS)
     .eq("id", invited.userId)
     .maybeSingle();
-  if (profile.error) {
+  if (profile.error || !profile.data) {
+    await discardInvite(invited.userId);
     return {
       ...emptyPortalUserFormState,
-      error: "The invitation was sent, but the profile could not be loaded.",
-    };
-  }
-  if (!profile.data) {
-    return {
-      ...emptyPortalUserFormState,
-      error: "The invitation was sent, but the profile was not created.",
+      error: profile.error
+        ? "The invitation could not be prepared."
+        : "The invitation profile could not be created.",
     };
   }
 
@@ -145,12 +196,13 @@ export async function invitePortalUser(
       .select(PROFILE_COLUMNS)
       .maybeSingle();
     if (updated.error || !updated.data) {
+      await discardInvite(invited.userId);
       return {
         ...emptyPortalUserFormState,
         error:
           parsed.role === "admin"
-            ? "The account was created, but Administrator access could not be assigned."
-            : "The account was created, but the profile could not be updated.",
+            ? "Administrator access could not be assigned, so the invitation was not sent."
+            : "The invitation profile could not be updated, so the invitation was not sent.",
       };
     }
     row = updated.data as ProfileRow;
@@ -163,12 +215,11 @@ export async function invitePortalUser(
     acceptUrl: invited.acceptUrl,
   });
   if (!emailed.ok) {
-    return {
-      ...emptyPortalUserFormState,
-      error: "The account was created, but the invitation email could not be sent.",
-    };
+    await discardInvite(invited.userId);
+    return { ...emptyPortalUserFormState, error: emailed.error };
   }
 
+  await recordInviteNotification(parsed.email, parsed.fullName);
   revalidatePath("/admin");
   return {
     error: null,
@@ -213,15 +264,9 @@ export async function resendPortalInvite(
     return { ...emptyPortalUserMutationState, error: "This user does not have an email address." };
   }
 
-  const invited = await invitationLink(email, fullName);
+  const invited = await activationLink(email);
   if (!invited.ok) {
-    return {
-      ...emptyPortalUserMutationState,
-      error:
-        invited.error === "A user with this email already exists."
-          ? "This user has already activated their account."
-          : invited.error,
-    };
+    return { ...emptyPortalUserMutationState, error: invited.error };
   }
 
   const emailed = await sendInviteEmail({
@@ -234,6 +279,7 @@ export async function resendPortalInvite(
     return { ...emptyPortalUserMutationState, error: emailed.error };
   }
 
+  await recordInviteNotification(email, fullName);
   revalidatePath("/admin");
   return {
     error: null,

@@ -2,7 +2,7 @@ import { BeneficiaryList } from "@/components/portal/beneficiary-list";
 import { AddBeneficiaryButton, AutoOpenModal } from "@/components/portal/modal-triggers";
 import { PageHeader, StatCardsSkeleton, TableSkeleton } from "@/components/portal/skeletons";
 import { beneficiaryNotice } from "@/lib/beneficiary";
-import { beneficiaryIdsOnInvoices, loadBeneficiaries } from "@/lib/beneficiaries";
+import { invoiceBeneficiaryIds, loadBeneficiaries } from "@/lib/beneficiaries";
 import { getPortalUser } from "@/lib/portal-user";
 import { Suspense } from "react";
 
@@ -13,6 +13,7 @@ export const metadata = {
 type SearchParams = Promise<{
   q?: string | string[];
   status?: string | string[];
+  contact?: string | string[];
   notice?: string | string[];
   new?: string | string[];
 }>;
@@ -35,12 +36,11 @@ async function BeneficiariesContent({ searchParams }: { searchParams: SearchPara
   const autoOpen = first(params.new) === "1";
 
   try {
-    const [data, user] = await Promise.all([
-      loadBeneficiaries(first(params.q), first(params.status)),
+    const [data, user, usedOnInvoices] = await Promise.all([
+      loadBeneficiaries(first(params.q), first(params.status), first(params.contact)),
       getPortalUser(),
+      invoiceBeneficiaryIds(),
     ]);
-    const usedOnInvoices =
-      user?.role === "admin" ? await beneficiaryIdsOnInvoices(data.beneficiaries.map((item) => item.id)) : new Set<string>();
     const deletableIds =
       user?.role === "admin" ? data.beneficiaries.filter((item) => !usedOnInvoices.has(item.id)).map((item) => item.id) : [];
     return (

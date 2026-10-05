@@ -91,7 +91,7 @@ export function BeneficiaryDetail({
 
       <section className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
         <dl className="grid gap-5 sm:grid-cols-2">
-          <DetailItem label="Contact person">{display(beneficiary.contactName)}</DetailItem>
+          <DetailItem label="Client legal name">{display(beneficiary.contactName)}</DetailItem>
           <DetailItem label="Email">{display(beneficiary.email)}</DetailItem>
           <DetailItem label="Phone">{display(beneficiary.phone)}</DetailItem>
           <DetailItem label="GSTIN">{display(beneficiary.gstin)}</DetailItem>

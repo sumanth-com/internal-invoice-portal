@@ -103,6 +103,7 @@ export type InvoicePartyFields = {
   country: string;
   gstin: string;
   pan: string;
+  cin: string;
   contactName: string;
   email: string;
   phone: string;
@@ -118,6 +119,7 @@ export const emptyPartyFields: InvoicePartyFields = {
   country: "",
   gstin: "",
   pan: "",
+  cin: "",
   contactName: "",
   email: "",
   phone: "",
@@ -142,10 +144,17 @@ export type InvoiceSummary = {
   paymentStanding: InvoicePaymentStanding;
 };
 
+export type InvoiceBeneficiaryOption = {
+  id: string;
+  name: string;
+};
+
 export type InvoiceListData = {
   invoices: InvoiceSummary[];
   total: number;
   search: string;
+  beneficiary: string;
+  beneficiaries: InvoiceBeneficiaryOption[];
   status: InvoiceStatus | "all";
   payment: InvoicePaymentFilter;
   from: string;
@@ -260,12 +269,58 @@ export function normalizeInvoiceSort(value: string | undefined): InvoiceSort {
 }
 
 export function normalizeInvoiceDateFilter(value: string | undefined) {
-  const text = (value ?? "").trim();
-  return DATE_PATTERN.test(text) ? text : "";
+  return canonicalInvoiceDate(value ?? "") ?? "";
+}
+
+export function canonicalInvoiceDate(value: string) {
+  const text = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  const dayFirstMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  const iso = isoMatch
+    ? text
+    : dayFirstMatch
+      ? `${dayFirstMatch[3]}-${dayFirstMatch[2]}-${dayFirstMatch[1]}`
+      : "";
+  if (!iso) return null;
+  const year = Number(iso.slice(0, 4));
+  const month = Number(iso.slice(5, 7));
+  const day = Number(iso.slice(8, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return iso;
+}
+
+export function formatDayMonthYear(value: string) {
+  const iso = canonicalInvoiceDate(value);
+  if (!iso) return "";
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+}
+
+export function normalizeInvoiceBeneficiary(value: string | undefined) {
+  return value && isInvoiceId(value) ? value : "";
+}
+
+export function invoiceNumberSearchTerms(value: string) {
+  const search = value.trim();
+  const terms = new Set<string>();
+  if (search) terms.add(search);
+  const compact = search.replace(/[\s/]/g, "").toUpperCase();
+  const financialYear = /^IF(\d{2})-?(\d{2})(\d{4})$/.exec(compact);
+  if (financialYear) {
+    terms.add(`IF/${financialYear[1]}-${financialYear[2]}/${financialYear[3]}`);
+  }
+  return [...terms];
 }
 
 export function invoiceListHref(options: {
   search?: string;
+  beneficiary?: string;
   status?: InvoiceStatus | "all";
   payment?: InvoicePaymentFilter;
   from?: string;
@@ -275,6 +330,9 @@ export function invoiceListHref(options: {
   const params = new URLSearchParams();
   const search = options.search?.trim();
   if (search) params.set("q", search);
+  if (options.beneficiary && isInvoiceId(options.beneficiary)) {
+    params.set("beneficiary", options.beneficiary);
+  }
   if (options.status && options.status !== "all") params.set("status", options.status);
   if (options.payment && options.payment !== "all") params.set("payment", options.payment);
   if (options.from) params.set("from", options.from);
@@ -497,6 +555,7 @@ export function formatCompanyBillFrom(company: {
   phone: string | null;
   gstin: string | null;
   pan: string | null;
+  cin?: string | null;
 }) {
   const trade =
     line(company.tradeName) && line(company.tradeName) !== line(company.legalName)
@@ -513,6 +572,7 @@ export function formatCompanyBillFrom(company: {
     line(company.country),
     line(company.gstin) ? `GSTIN: ${line(company.gstin)}` : null,
     line(company.pan) ? `PAN: ${line(company.pan)}` : null,
+    line(company.cin) ? `CIN: ${line(company.cin)}` : null,
     line(company.email),
     line(company.phone),
   ]
@@ -534,6 +594,7 @@ export function partyFieldsFromSource(source: {
   country?: string | null;
   gstin?: string | null;
   pan?: string | null;
+  cin?: string | null;
 }): InvoicePartyFields {
   return {
     companyName: source.legalName.trim(),
@@ -548,6 +609,7 @@ export function partyFieldsFromSource(source: {
     country: line(source.country) ?? "",
     gstin: line(source.gstin) ?? "",
     pan: line(source.pan) ?? "",
+    cin: line(source.cin) ?? "",
     contactName: line(source.contactName) ?? "",
     email: line(source.email) ?? "",
     phone: line(source.phone) ?? "",
@@ -566,6 +628,7 @@ export function composePartyFields(fields: InvoicePartyFields) {
     line(fields.country),
     line(fields.gstin) ? `GSTIN: ${line(fields.gstin)}` : null,
     line(fields.pan) ? `PAN: ${line(fields.pan)}` : null,
+    line(fields.cin) ? `CIN: ${line(fields.cin)}` : null,
     line(fields.email),
     line(fields.phone),
   ]
@@ -587,6 +650,7 @@ export function parsePartyFields(text: string): InvoicePartyFields {
   };
   const gstin = take("GSTIN:");
   const pan = take("PAN:");
+  const cin = take("CIN:");
   const emailIndex = rows.findIndex((row) => row.includes("@"));
   const email = emailIndex >= 0 ? rows.splice(emailIndex, 1)[0] : "";
   const phoneIndex = rows.findIndex((row) => /^[+\d][\d\s().-]{6,}$/.test(row));
@@ -622,6 +686,7 @@ export function parsePartyFields(text: string): InvoicePartyFields {
     country,
     gstin,
     pan,
+    cin,
     contactName: "",
     email,
     phone,
@@ -677,9 +742,9 @@ export function parseInvoiceForm(
     errors.beneficiary_id = "Select a beneficiary.";
   }
 
-  const invoiceDate = fieldText(formData, "invoice_date");
+  const invoiceDate = canonicalInvoiceDate(fieldText(formData, "invoice_date")) ?? "";
   const dateWindow = options.invoiceNumber ? invoiceDateWindow(options.invoiceNumber) : null;
-  if (!DATE_PATTERN.test(invoiceDate)) {
+  if (!invoiceDate) {
     errors.invoice_date = "Enter an invoice date.";
   } else if (dateWindow && (invoiceDate < dateWindow.start || invoiceDate > dateWindow.end)) {
     errors.invoice_date = isFinancialYearNumber(options.invoiceNumber ?? "")
@@ -690,12 +755,13 @@ export function parseInvoiceForm(
   const dueDateText = fieldText(formData, "due_date");
   let dueDate: string | null = null;
   if (dueDateText) {
-    if (!DATE_PATTERN.test(dueDateText)) {
+    const dueIso = canonicalInvoiceDate(dueDateText);
+    if (!dueIso) {
       errors.due_date = "Enter a valid due date.";
-    } else if (DATE_PATTERN.test(invoiceDate) && dueDateText < invoiceDate) {
+    } else if (invoiceDate && dueIso < invoiceDate) {
       errors.due_date = "Due date must be on or after the invoice date.";
     } else {
-      dueDate = dueDateText;
+      dueDate = dueIso;
     }
   }
 

@@ -1,6 +1,8 @@
 import { PortalBrand } from "@/components/brand-logo";
 import { LogoutButton } from "@/components/logout-button";
+import { NotificationCenterProvider, RefreshNotificationsOnNavigate } from "@/components/portal/notification-center";
 import { PortalModalsProvider } from "@/components/portal/portal-modals";
+import { ToastProvider } from "@/components/portal/toasts";
 import { CloseMobileNavOnNavigate, PortalNavProvider, PortalTopNav } from "@/components/portal/portal-shell";
 import { getPortalUser } from "@/lib/portal-user";
 import { Suspense } from "react";
@@ -38,6 +40,7 @@ async function SignedInNav() {
   return (
     <PortalNavProvider>
       <CloseMobileNavOnNavigate />
+      <RefreshNotificationsOnNavigate />
       <PortalTopNav user={user} />
     </PortalNavProvider>
   );
@@ -56,12 +59,16 @@ export default function PortalLayout({
 }) {
   return (
     <div className="portal-shell flex h-dvh flex-col overflow-hidden bg-background">
-      <Suspense fallback={<HeaderFallback />}>
-        <SignedInNav />
-      </Suspense>
-      <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-muted/30 p-4 md:p-6 dark:bg-transparent">
-        <PortalModalsProvider>{children}</PortalModalsProvider>
-      </main>
+      <ToastProvider>
+        <NotificationCenterProvider>
+          <Suspense fallback={<HeaderFallback />}>
+            <SignedInNav />
+          </Suspense>
+          <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-muted/30 p-4 md:p-6 dark:bg-transparent">
+            <PortalModalsProvider>{children}</PortalModalsProvider>
+          </main>
+        </NotificationCenterProvider>
+      </ToastProvider>
       <Suspense fallback={null}>
         <PortalAccess />
       </Suspense>

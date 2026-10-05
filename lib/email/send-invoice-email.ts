@@ -7,7 +7,7 @@ import {
   renderInvoiceEmail,
   type InvoiceEmailDetails,
 } from "@/lib/email/invoice-template";
-import { createResendClient, resendFromAddress } from "@/lib/email/resend";
+import { createResendClient, resendFromAddress, resendSendError } from "@/lib/email/resend";
 
 const EMAIL_LOGO_PATH = path.join(process.cwd(), "assets", "Logo.png");
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,11 +23,7 @@ export type SendInvoiceEmailResult =
   | { ok: false; error: string };
 
 function invoiceEmailError(message: string | undefined) {
-  const text = message?.trim();
-  if (!text || /re_[A-Za-z0-9]|api[_ -]?key/i.test(text)) {
-    return "The invoice email could not be sent.";
-  }
-  return text;
+  return resendSendError(message, "The invoice email could not be sent.");
 }
 
 function pdfFileName(fileName: string, invoiceNumber: string) {
@@ -57,7 +53,11 @@ export async function sendInvoiceEmail(
     return { ok: false, error: "Email sending is not configured. RESEND_API_KEY is missing." };
   }
   if (!from) {
-    return { ok: false, error: "Email sending is not configured. RESEND_FROM_EMAIL is missing." };
+    return {
+      ok: false,
+      error:
+        "The sender address is not configured. Use a verified sender such as iFranchise Invoices <sumanth.reddy@ifranchise.in>.",
+    };
   }
 
   const content = renderInvoiceEmail(input);

@@ -88,12 +88,47 @@ export function EditBeneficiaryButton({
   );
 }
 
+export function EditDraftButton({ id }: { id: string }) {
+  const { openEditInvoice } = usePortalModals();
+
+  return (
+    <Button type="button" variant="outline" onClick={() => openEditInvoice(id)}>
+      <Pencil />
+      Edit draft
+    </Button>
+  );
+}
+
+export function AutoOpenEditInvoice({ id }: { id: string }) {
+  const { openEditInvoice } = usePortalModals();
+  const open = useRef(() => openEditInvoice(id)).current;
+  useAutoOpen(true, open);
+  return null;
+}
+
 export function AutoOpenModal({ kind }: { kind: "invoice" | "beneficiary" }) {
   const { openCreateInvoice, openBeneficiary } = usePortalModals();
   const open = useRef(() =>
     kind === "invoice" ? openCreateInvoice() : openBeneficiary(),
   ).current;
   useAutoOpen(true, open);
+  return null;
+}
+
+export function ActionNotice({ message }: { message: string | null }) {
+  const { notify } = usePortalModals();
+  const shown = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!message || shown.current === message) return;
+    shown.current = message;
+    notify(message);
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("notice")) return;
+    url.searchParams.delete("notice");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [message, notify]);
+
   return null;
 }
 

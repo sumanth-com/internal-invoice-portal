@@ -8,6 +8,7 @@ import {
   invoicePdfFileName,
   loadInvoicePdfData,
 } from "@/lib/pdf/invoice-pdf-data";
+import { recordInvoiceEmailNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
 import { unstable_rethrow } from "next/navigation";
@@ -83,6 +84,7 @@ export async function emailInvoice(
       };
     }
 
+    await recordInvoiceEmailNotification(data.invoice.id, data.invoice.invoiceNumber, recipient);
     return { ...emptyEmailInvoiceState, sent: true };
   } catch (error) {
     unstable_rethrow(error);

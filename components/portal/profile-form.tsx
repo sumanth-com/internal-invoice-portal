@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AVATAR_MAX_BYTES, emptyProfileSaveState, inspectAvatar } from "@/lib/profile-avatar";
 import { userInitials } from "@/lib/portal";
-import { useTimedFlag } from "@/components/portal/settings-fields";
+import { useActionToast } from "@/components/portal/toasts";
+import { usePortalModals } from "@/components/portal/portal-modals";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
@@ -25,7 +26,9 @@ export function ProfileForm({
   avatarUrl: string | null;
 }) {
   const router = useRouter();
+  const { notify } = usePortalModals();
   const [state, formAction, pending] = useActionState(saveProfile, emptyProfileSaveState);
+  useActionToast(state, state.error, "error");
   const [, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const handledSave = useRef<number | null>(null);
@@ -40,7 +43,6 @@ export function ProfileForm({
   const [clientError, setClientError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
-  const savedVisible = useTimedFlag(state.savedAt, 3000);
   const shownAvatar = previewUrl ?? (removed ? null : savedAvatarUrl);
   const dirty =
     name.trim() !== baselineName.trim() || file !== null || (removed && Boolean(savedAvatarUrl));
@@ -54,6 +56,7 @@ export function ProfileForm({
   useEffect(() => {
     if (!state.savedAt || handledSave.current === state.savedAt) return;
     handledSave.current = state.savedAt;
+    notify("Profile saved.");
     const nextName = state.fullName?.trim() || "";
     setName(nextName);
     setBaselineName(nextName);
@@ -68,7 +71,7 @@ export function ProfileForm({
     setPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
     startTransition(() => router.refresh());
-  }, [router, state.avatarUrl, state.fullName, state.savedAt]);
+  }, [notify, router, state.avatarUrl, state.fullName, state.savedAt]);
 
   function clearPreview() {
     if (previewRef.current) {
@@ -236,13 +239,6 @@ export function ProfileForm({
           <p className="mt-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm">{roleLabel}</p>
         </div>
       </div>
-
-      {state.error ? <p className="mt-4 text-sm text-destructive">{state.error}</p> : null}
-      {savedVisible ? (
-        <p role="status" className="mt-4 text-sm text-emerald-700 dark:text-emerald-300">
-          Profile saved.
-        </p>
-      ) : null}
 
       <div className="mt-6 flex items-center justify-end gap-2">
         <Button type="button" variant="outline" disabled={pending || !dirty} onClick={cancel}>

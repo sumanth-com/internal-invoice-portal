@@ -5,10 +5,11 @@ import {
   saveBankAccount,
   setBankAccountActive,
 } from "@/app/(portal)/settings/actions";
+import { useActionToast } from "@/components/portal/toasts";
+import { usePortalModals } from "@/components/portal/portal-modals";
 import {
   fieldProps,
   SettingsField,
-  SettingsNotice,
   SettingsSection,
 } from "@/components/portal/settings-fields";
 import { Badge } from "@/components/ui/badge";
@@ -36,14 +37,17 @@ function BankForm({
 }) {
   const [state, formAction, pending] = useActionState(saveBankAccount, emptyBankFormState);
   const handled = useRef<typeof state | null>(null);
+  const { notify } = usePortalModals();
   const errors = state.fieldErrors;
+  useActionToast(state, state.error, "error");
 
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
+    notify("Bank account saved.");
     onSaved(state.saved, state.clearedDefaultId ?? null);
     invalidateInvoiceFormOptions();
-  }, [state, onSaved]);
+  }, [notify, state, onSaved]);
 
   return (
     <form
@@ -56,7 +60,6 @@ function BankForm({
       }}
     >
       {account ? <input type="hidden" name="id" value={account.id} /> : null}
-      {state.error ? <SettingsNotice tone="error">{state.error}</SettingsNotice> : null}
       <fieldset disabled={pending} className="grid gap-4 sm:grid-cols-2">
         <SettingsField id="account_holder_name" label="Account name" required error={errors.account_holder_name}>
           <Input
@@ -162,12 +165,16 @@ function AccountCard({
   );
   const handledActive = useRef<typeof activeState | null>(null);
   const handledDelete = useRef<typeof deleteState | null>(null);
+  const { notify } = usePortalModals();
   const pending = activePending || deletePending;
+  useActionToast(activeState, activeState.error, "error");
+  useActionToast(deleteState, deleteState.error, "error");
 
   useEffect(() => {
     if (!activeState.saved || handledActive.current === activeState) return;
     handledActive.current = activeState;
     const saved = activeState.saved;
+    notify(saved.isActive ? "Bank account activated." : "Bank account deactivated.");
     onChanged((current) =>
       sortBankAccounts(
         current.map((item) =>
@@ -177,15 +184,16 @@ function AccountCard({
     );
     setConfirm(null);
     invalidateInvoiceFormOptions();
-  }, [activeState, onChanged]);
+  }, [activeState, notify, onChanged]);
 
   useEffect(() => {
     if (!deleteState.deletedId || handledDelete.current === deleteState) return;
     handledDelete.current = deleteState;
+    notify("Bank account deleted.");
     const deletedId = deleteState.deletedId;
     onChanged((current) => current.filter((item) => item.id !== deletedId));
     invalidateInvoiceFormOptions();
-  }, [deleteState, onChanged]);
+  }, [deleteState, notify, onChanged]);
 
   return (
     <article className="rounded-lg border p-3">
@@ -234,8 +242,6 @@ function AccountCard({
           Used on {account.invoiceCount} invoice{account.invoiceCount === 1 ? "" : "s"}. It can be deactivated, not deleted.
         </p>
       ) : null}
-      {activeState.error ? <div className="mt-3"><SettingsNotice tone="error">{activeState.error}</SettingsNotice></div> : null}
-      {deleteState.error ? <div className="mt-3"><SettingsNotice tone="error">{deleteState.error}</SettingsNotice></div> : null}
       {canEdit ? (
         <div className="mt-3 flex flex-col gap-2">
           {confirm === "delete" ? (

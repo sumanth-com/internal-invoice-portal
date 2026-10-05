@@ -12,6 +12,7 @@ import {
 } from "@/lib/payment";
 import { isInvoiceId } from "@/lib/invoice";
 import { mapPayment, PAYMENT_COLUMNS, type PaymentRow } from "@/lib/payments";
+import { recordInvoiceNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -111,6 +112,9 @@ export async function recordPayment(
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${value.invoiceId}`);
   revalidatePath("/dashboard");
+  if (invoiceStatus === "paid") {
+    await recordInvoiceNotification(value.invoiceId, "invoice_paid");
+  }
 
   return { ...emptyPaymentFormState, saved };
 }
@@ -228,6 +232,9 @@ export async function updatePayment(
   }
 
   const saved = await recordedPayment(supabase, updated.data as PaymentRow);
+  if (invoiceResult.data.status !== "paid" && saved.invoiceStatus === "paid") {
+    await recordInvoiceNotification(parsed.value.invoiceId, "invoice_paid");
+  }
   revalidatePath("/payments");
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${parsed.value.invoiceId}`);

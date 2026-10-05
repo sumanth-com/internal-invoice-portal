@@ -6,11 +6,13 @@ import {
   isInvoiceId,
   isInvoiceStatus,
   parseInvoiceForm,
+  type InvoiceDetail,
   type InvoiceFormState,
   type InvoiceMutationState,
   type InvoiceStatus,
 } from "@/lib/invoice";
-import { loadInvoiceFormOptions } from "@/lib/invoices";
+import { loadInvoice, loadInvoiceFormOptions } from "@/lib/invoices";
+import { recordInvoiceNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -23,6 +25,40 @@ function denied(message: string): InvoiceFormState {
 export type InvoiceFormOptionsResult =
   | { ok: true; data: Awaited<ReturnType<typeof loadInvoiceFormOptions>> }
   | { ok: false; error: string };
+
+export type InvoiceDraftResult =
+  | {
+      ok: true;
+      invoice: InvoiceDetail;
+      options: Awaited<ReturnType<typeof loadInvoiceFormOptions>>;
+    }
+  | { ok: false; error: string };
+
+export async function fetchInvoiceDraft(id: string): Promise<InvoiceDraftResult> {
+  const user = await getPortalUser();
+  if (!user?.isActive) {
+    return { ok: false, error: "You do not have permission to edit an invoice." };
+  }
+  if (!isInvoiceId(id)) return { ok: false, error: "This invoice was not found." };
+
+  try {
+    const invoice = await loadInvoice(id);
+    if (!invoice) return { ok: false, error: "This invoice was not found." };
+    if (invoice.status !== "draft") {
+      return { ok: false, error: "Only a draft invoice can be edited." };
+    }
+    const options = await loadInvoiceFormOptions({
+      beneficiaryId: invoice.beneficiaryId,
+      bankAccountId: invoice.bankAccountId,
+    });
+    return { ok: true, invoice, options };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "This invoice could not be loaded.",
+    };
+  }
+}
 
 export async function fetchInvoiceFormOptions(): Promise<InvoiceFormOptionsResult> {
   try {
@@ -145,6 +181,7 @@ export async function saveInvoice(
 
     revalidatePath("/invoices");
     revalidatePath("/dashboard");
+    await recordInvoiceNotification(created.data.id, "invoice_draft");
     redirect(`/invoices/${created.data.id}?notice=saved`);
   }
 
@@ -174,6 +211,7 @@ export async function saveInvoice(
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/dashboard");
+  await recordInvoiceNotification(id, "invoice_draft");
   redirect(`/invoices/${id}?notice=saved`);
 }
 
@@ -206,6 +244,7 @@ export async function issueInvoice(
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/dashboard");
+  await recordInvoiceNotification(id, "invoice_issued");
   redirect(`/invoices/${id}?notice=issued`);
 }
 
@@ -248,6 +287,7 @@ export async function cancelInvoice(
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/dashboard");
+  await recordInvoiceNotification(id, "invoice_cancelled");
   redirect(`/invoices/${id}?notice=cancelled`);
 }
 
@@ -285,6 +325,12 @@ export async function setInvoiceStatus(
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/dashboard");
+  if (status === "issued" || status === "paid" || status === "cancelled") {
+    await recordInvoiceNotification(
+      id,
+      status === "issued" ? "invoice_issued" : status === "paid" ? "invoice_paid" : "invoice_cancelled",
+    );
+  }
   return { ok: true, status };
 }
 

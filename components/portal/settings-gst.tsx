@@ -1,13 +1,12 @@
 "use client";
 
 import { saveDefaultCurrency, saveGstDefaults } from "@/app/(portal)/settings/actions";
+import { useActionToast } from "@/components/portal/toasts";
+import { usePortalModals } from "@/components/portal/portal-modals";
 import {
   fieldProps,
   SettingsField,
-  SettingsNotice,
-  SettingsSaved,
   SettingsSection,
-  useTimedFlag,
 } from "@/components/portal/settings-fields";
 import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
@@ -39,16 +38,18 @@ function CurrencyField({
   const [state, formAction, pending] = useActionState(saveDefaultCurrency, emptyCurrencyFormState);
   const handled = useRef<typeof state | null>(null);
   const countryRef = useRef(country);
-  const savedVisible = useTimedFlag(state.saved && !state.error ? state : null);
+  const { notify } = usePortalModals();
   const choices = currencyChoices(country);
+  useActionToast(state, state.error, "error");
 
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
+    notify("Currency saved.");
     setValue(state.saved);
     onSaved(state.saved);
     invalidateInvoiceFormOptions();
-  }, [state, onSaved]);
+  }, [notify, state, onSaved]);
 
   useEffect(() => {
     if (countryRef.current === country) return;
@@ -80,9 +81,6 @@ function CurrencyField({
 
   return (
     <div>
-      <SettingsSaved show={savedVisible} className="top-4 sm:top-4">
-        Currency saved.
-      </SettingsSaved>
       <SettingsField id="default_currency" label="Currency" error={state.fieldErrors.default_currency}>
         <ChoiceSelect
           id="default_currency"
@@ -119,28 +117,31 @@ export function GstDefaultsSection({
   const [rate, setRate] = useState(rateText(defaults.defaultGstRate));
   const [gstin, setGstin] = useState(defaults.gstin);
   const [pan, setPan] = useState(defaults.pan);
+  const [cin, setCin] = useState(defaults.cin);
   const [state, formAction, pending] = useActionState(saveGstDefaults, emptyGstFormState);
   const handled = useRef<typeof state | null>(null);
   const errors = state.fieldErrors;
-  const savedVisible = useTimedFlag(state.saved && !state.error ? state : null);
+  const { notify } = usePortalModals();
+  useActionToast(state, state.error, "error");
 
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
+    notify("GST details saved.");
     setEnabled(state.saved.defaultGstEnabled);
     setRate(rateText(state.saved.defaultGstRate));
     setGstin(state.saved.gstin);
+    setCin(state.saved.cin);
     setPan(state.saved.pan);
     onSaved(state.saved);
     invalidateInvoiceFormOptions();
-  }, [state, onSaved]);
+  }, [notify, state, onSaved]);
 
   return (
     <SettingsSection
       title="GST defaults"
-      description="GST rate, currency, GSTIN, and PAN used when a new invoice is created. The company state decides CGST and SGST for supply in that state, or IGST for every other state. Existing invoices keep the tax details already saved on them."
+      description="GST rate, currency, GSTIN, PAN, and CIN used when a new invoice is created. The company state decides CGST and SGST for supply in that state, or IGST for every other state. Existing invoices keep the tax amounts already saved on them."
     >
-      <SettingsSaved show={savedVisible}>GST details saved.</SettingsSaved>
       <div className="grid gap-4">
         {!exists ? (
           <p className="text-sm text-muted-foreground">
@@ -159,7 +160,6 @@ export function GstDefaultsSection({
               startTransition(() => formAction(formData));
             }}
           >
-            {state.error ? <SettingsNotice tone="error">{state.error}</SettingsNotice> : null}
             <div className="grid gap-4 sm:grid-cols-2">
             <fieldset disabled={pending} className="contents">
               <label className="flex items-start gap-2 text-sm sm:col-span-2">
@@ -215,6 +215,16 @@ export function GstDefaultsSection({
                   className="uppercase"
                 />
               </SettingsField>
+              <SettingsField id="cin" label="CIN" error={errors.cin}>
+                <Input
+                  {...fieldProps("cin", errors.cin)}
+                  value={cin}
+                  onChange={(event) => setCin(event.target.value.toUpperCase())}
+                  maxLength={21}
+                  autoCapitalize="characters"
+                  className="uppercase"
+                />
+              </SettingsField>
             </fieldset>
             </div>
             <Button type="submit" disabled={pending} className="w-full sm:w-auto">
@@ -243,6 +253,10 @@ export function GstDefaultsSection({
             <div>
               <dt className="text-xs text-muted-foreground">PAN</dt>
               <dd className="mt-1 text-sm">{defaults.pan || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">CIN</dt>
+              <dd className="mt-1 text-sm">{defaults.cin || "—"}</dd>
             </div>
           </dl>
         )}

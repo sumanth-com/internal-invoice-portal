@@ -1,7 +1,13 @@
 import { ReportsView } from "@/components/portal/reports-view";
 import { TableSkeleton } from "@/components/portal/skeletons";
 import { loadReport } from "@/lib/reports-data";
-import { buildReport, filterReportInvoices, reportTypeFromParam } from "@/lib/reports";
+import {
+  beneficiaryIdFromParam,
+  buildReport,
+  filterReportInvoices,
+  reportBeneficiaryOptions,
+  reportTypeFromParam,
+} from "@/lib/reports";
 import { Suspense } from "react";
 
 export const metadata = {
@@ -37,17 +43,37 @@ async function ReportsContent({ searchParams }: { searchParams: SearchParams }) 
     });
     const type = reportTypeFromParam(read("type"));
     const query = read("q")?.trim() ?? "";
+    const beneficiary = beneficiaryIdFromParam(read("beneficiary"));
+    const beneficiaries = reportBeneficiaryOptions(loaded.invoices);
     if (loaded.view.error) {
-      return <ReportsView data={loaded.view} invoices={[]} type={type} query={query} />;
+      return (
+        <ReportsView
+          data={loaded.view}
+          invoices={[]}
+          type={type}
+          query={query}
+          beneficiaries={beneficiaries}
+          beneficiary={beneficiary}
+        />
+      );
     }
-    const invoices = filterReportInvoices(loaded.invoices, { type, query });
+    const invoices = filterReportInvoices(loaded.invoices, { type, query, beneficiaryId: beneficiary });
     const view = buildReport(invoices, {
       range: loaded.view.range,
       from: loaded.view.from,
       to: loaded.view.to,
       activeBeneficiaries: loaded.view.beneficiaries.active,
     });
-    return <ReportsView data={view} invoices={invoices} type={type} query={query} />;
+    return (
+      <ReportsView
+        data={view}
+        invoices={invoices}
+        type={type}
+        query={query}
+        beneficiaries={beneficiaries}
+        beneficiary={beneficiary}
+      />
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Reports could not be loaded.";
     return (

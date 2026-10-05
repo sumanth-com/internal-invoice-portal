@@ -1,6 +1,7 @@
 "use client";
 
 import { PortalBrand } from "@/components/brand-logo";
+import { useNotificationCenter } from "@/components/portal/notification-center";
 import { UserMenu } from "@/components/portal/user-menu";
 import { Button } from "@/components/ui/button";
 import type { PortalUser } from "@/lib/portal";
@@ -8,8 +9,8 @@ import { cn } from "@/lib/utils";
 import {
   Banknote,
   BarChart3,
-  FileText,
   Bell,
+  FileText,
   LayoutDashboard,
   Menu,
   ScrollText,
@@ -35,10 +36,10 @@ const primaryNav: NavItem[] = [
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/payments", label: "Payments", icon: Banknote },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
 ];
 
 const moreNav: NavItem[] = [
-  { href: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
   { href: "/admin", label: "Admin Management", icon: Shield, adminOnly: true },
 ];
 
@@ -55,7 +56,7 @@ function pillLinkClass(active: boolean) {
     "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-150",
     active
       ? "bg-primary font-medium text-white"
-      : "text-zinc-300 hover:bg-white/10 hover:text-white",
+      : "text-foreground/75 hover:bg-muted hover:text-foreground dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white",
   );
 }
 
@@ -71,16 +72,17 @@ function mobileLinkClass(active: boolean) {
 const headerIconClass =
   "inline-flex size-9 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors duration-150";
 
-const headerIconHover =
-  "hover:bg-accent dark:hover:border-[hsl(262,40%,42%)] dark:hover:text-white";
+const headerIconHover = "hover:bg-accent dark:hover:border-[hsl(262,40%,42%)] dark:hover:text-white";
 
 function headerIconState(active: boolean) {
   return cn(
     headerIconClass,
-    active
-      ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-      : headerIconHover,
+    active ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90" : headerIconHover,
   );
+}
+
+function unreadLabel(count: number) {
+  return count > 9 ? "9+" : String(count);
 }
 
 const NavContext = createContext<{
@@ -134,15 +136,27 @@ function HeaderIconLink({ item, pathname }: { item: NavItem; pathname: string })
 }
 
 function NotificationsLink({ pathname }: { pathname: string }) {
+  const { unreadCount } = useNotificationCenter();
   const active = isActive(pathname, "/notifications");
+  const count = unreadCount > 0 ? unreadLabel(unreadCount) : null;
   return (
     <Link
       href="/notifications"
-      aria-label="Notifications"
+      aria-label={count ? `Notifications, ${unreadCount} unread` : "Notifications"}
       aria-current={active ? "page" : undefined}
-      className={headerIconState(active)}
+      className={cn(headerIconState(active), "relative")}
     >
       <Bell className="size-4" />
+      {count ? (
+        <span
+          className={cn(
+            "absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium leading-none",
+            active ? "bg-white text-primary" : "bg-primary text-primary-foreground",
+          )}
+        >
+          {count}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -150,30 +164,27 @@ function NotificationsLink({ pathname }: { pathname: string }) {
 export function PortalTopNav({ user }: { user: PortalUser }) {
   const pathname = usePathname();
   const { mobileOpen, setMobileOpen } = usePortalNav();
+  const { unreadCount } = useNotificationCenter();
   const primary = allowed(primaryNav, user);
   const more = allowed(moreNav, user);
   const canOpenSettings = user.role === "admin";
   const settingsActive = isActive(pathname, "/settings");
+  const notificationsActive = isActive(pathname, "/notifications");
 
   return (
-    <header className="sticky top-0 z-30 border-b bg-card">
+    <header className="sticky top-0 z-30 shrink-0 border-b bg-card">
       <div className="relative flex h-[72px] items-center px-4 md:px-6">
         <Brand />
         <div className="pointer-events-none absolute inset-x-0 hidden justify-center xl:flex">
           <nav
-            className="pointer-events-auto flex items-center gap-0.5 rounded-full bg-neutral-900 p-1 shadow-sm dark:bg-[hsl(223,42%,14%)] dark:shadow-[0_0_0_1px_hsl(220_28%_24%)]"
+            className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border bg-white p-1 shadow-sm dark:border-transparent dark:bg-[hsl(223,42%,14%)] dark:shadow-[0_0_0_1px_hsl(220_28%_24%)]"
             aria-label="Portal"
           >
             {primary.map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, item.href);
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={pillLinkClass(active)}
-                >
+                <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={pillLinkClass(active)}>
                   <Icon className="size-4" />
                   {item.label}
                 </Link>
@@ -215,12 +226,17 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
           <div className="flex flex-col gap-1">
             <Link
               href="/notifications"
-              aria-current={isActive(pathname, "/notifications") ? "page" : undefined}
-              className={mobileLinkClass(isActive(pathname, "/notifications"))}
+              aria-current={notificationsActive ? "page" : undefined}
+              className={mobileLinkClass(notificationsActive)}
               onClick={() => setMobileOpen(false)}
             >
               <Bell className="size-4" />
               Notifications
+              {unreadCount > 0 ? (
+                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                  {unreadLabel(unreadCount)}
+                </span>
+              ) : null}
             </Link>
             {[...primary, ...more].map((item) => {
               const Icon = item.icon;

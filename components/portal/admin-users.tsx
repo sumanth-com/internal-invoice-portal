@@ -8,6 +8,9 @@ import {
   updatePortalUser,
 } from "@/app/(portal)/admin/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
+import { usePortalModals } from "@/components/portal/portal-modals";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,22 +135,6 @@ function FilterSelect({
   );
 }
 
-function Notice({ tone, children }: { tone: "success" | "error"; children: string }) {
-  return (
-    <p
-      role={tone === "error" ? "alert" : "status"}
-      className={cn(
-        "rounded-lg border px-4 py-3 text-sm",
-        tone === "error"
-          ? "border-destructive/30 bg-destructive/10 text-destructive"
-          : "border-emerald-600/20 bg-emerald-600/10 text-emerald-800 dark:text-emerald-200",
-      )}
-    >
-      {children}
-    </p>
-  );
-}
-
 function RoleBadge({ role }: { role: PortalUserRow["role"] }) {
   return <Badge variant={role === "admin" ? "default" : "secondary"}>{accessLabel(role)}</Badge>;
 }
@@ -221,6 +208,7 @@ function AddUserForm({ onSaved }: { onSaved: (user: PortalUserRow) => void }) {
   const modal = useModal();
   const [role, setRole] = useState<AppRole>("internal_user");
   const [state, formAction, pending] = useActionState(invitePortalUser, emptyPortalUserFormState);
+  useActionToast(state, state.error, "error");
   const handled = useRef<PortalUserFormState | null>(null);
 
   useEffect(() => {
@@ -247,7 +235,6 @@ function AddUserForm({ onSaved }: { onSaved: (user: PortalUserRow) => void }) {
     >
       <ModalBody>
         <fieldset disabled={pending} className="grid gap-4 p-4 sm:p-6">
-          {state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <p className="text-sm text-muted-foreground">
             An invitation email is sent through the existing sign-in flow. The role below is the access they receive.
           </p>
@@ -328,6 +315,7 @@ function EditUserForm({
   const [role, setRole] = useState(user.role);
   const [active, setActive] = useState(user.isActive);
   const [state, formAction, pending] = useActionState(updatePortalUser, emptyPortalUserFormState);
+  useActionToast(state, state.error, "error");
   const handled = useRef<PortalUserFormState | null>(null);
 
   useEffect(() => {
@@ -357,7 +345,6 @@ function EditUserForm({
       <input type="hidden" name="is_active" value={isSelf || active ? "true" : "false"} />
       <ModalBody>
         <fieldset disabled={pending} className="grid gap-4 p-4 sm:p-6">
-          {state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <div className="grid gap-2">
             <Label htmlFor="edit_full_name">
               Name<span className="text-destructive"> *</span>
@@ -447,6 +434,7 @@ function DeactivateUserForm({
     setPortalUserActive,
     emptyPortalUserMutationState,
   );
+  useActionToast(state, state.error, "error");
   const handled = useRef(state);
 
   useEffect(() => {
@@ -473,7 +461,6 @@ function DeactivateUserForm({
       <input type="hidden" name="is_active" value="false" />
       <ModalBody>
         <div className="grid gap-4 p-4 sm:p-6">
-          {state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <p className="text-sm text-muted-foreground">
             Their invoices, payments, and beneficiaries stay as they are. This only turns off portal access.
           </p>
@@ -500,6 +487,7 @@ function DeleteInviteForm({
 }) {
   const modal = useModal();
   const [state, formAction, pending] = useActionState(deletePortalUser, emptyPortalUserMutationState);
+  useActionToast(state, state.error, "error");
   const handled = useRef(state);
   const { setBusy } = modal;
 
@@ -526,7 +514,6 @@ function DeleteInviteForm({
       <input type="hidden" name="id" value={user.id} />
       <ModalBody>
         <div className="grid gap-3 p-4">
-          {state.error ? <Notice tone="error">{state.error}</Notice> : null}
           <p className="text-sm text-muted-foreground">
             {displayName(user)} has not joined yet. Deleting removes the invitation and the account.
           </p>
@@ -570,6 +557,8 @@ function UserActions({
     resendPortalInvite,
     emptyPortalUserMutationState,
   );
+  useActionToast(state, state.error, "error");
+  useActionToast(resendState, resendState.error, "error");
   const handled = useRef(state);
   const resent = useRef(resendState);
 
@@ -634,10 +623,6 @@ function UserActions({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      {state.error ? <p className="max-w-48 text-right text-xs text-destructive">{state.error}</p> : null}
-      {resendState.error ? (
-        <p className="max-w-48 text-right text-xs text-destructive">{resendState.error}</p>
-      ) : null}
     </div>
   );
 }
@@ -655,11 +640,11 @@ export function AdminUsers({
   const [editing, setEditing] = useState<PortalUserRow | null>(null);
   const [deactivating, setDeactivating] = useState<PortalUserRow | null>(null);
   const [deleting, setDeleting] = useState<PortalUserRow | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState(serverData.search);
   const [role, setRole] = useState(serverData.role);
   const [status, setStatus] = useState(serverData.status);
   const router = useRouter();
+  const { notify } = usePortalModals();
 
   if (source !== serverData) {
     setSource(serverData);
@@ -674,16 +659,11 @@ export function AdminUsers({
     setAdding(false);
     setEditing(null);
     setDeactivating(null);
-    setNotice(message);
+    notify(message);
+    if (message.startsWith("Invitation")) requestNotificationRefresh();
   }
 
   const filtering = data.search.length > 0 || data.role !== "all" || data.status !== "all";
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   const pushFilters = useCallback(
     (next?: { search?: string; role?: string; status?: string }) => {
@@ -709,14 +689,6 @@ export function AdminUsers({
 
   return (
     <div className="flex flex-col gap-6">
-      {notice ? (
-        <p
-          role="status"
-          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-emerald-600/20 bg-card px-4 py-3 text-sm text-emerald-800 shadow-lg dark:text-emerald-200"
-        >
-          {notice}
-        </p>
-      ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Total users"
@@ -954,7 +926,7 @@ export function AdminUsers({
               const id = deleting.id;
               setData((current) => removeDeleted(current, id));
               setDeleting(null);
-              setNotice("Invitation deleted.");
+              notify("Invitation deleted.");
             }}
           />
         ) : null}

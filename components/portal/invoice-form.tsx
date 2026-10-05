@@ -2,6 +2,7 @@
 
 import { saveInvoice } from "@/app/(portal)/invoices/actions";
 import { ModalBody, ModalFooter, useOptionalModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
 import { createClient } from "@/lib/supabase/client";
 import type { Beneficiary } from "@/lib/beneficiary";
 import { formatGstRate, stateCodeForParty } from "@/lib/gst";
@@ -10,6 +11,7 @@ import {
   emptyInvoiceFormState,
   emptyPartyFields,
   financialYearLabel,
+  formatDayMonthYear,
   formatMoney,
   invoiceDateWindow,
   isFinancialYearNumber,
@@ -23,13 +25,13 @@ import {
   type InvoicePartyFields,
   type InvoicePartyOption,
 } from "@/lib/invoice";
-import { indiaStateNames } from "@/lib/settings-places";
-import { ChoiceSelect } from "@/components/portal/suggest-field";
+import { cityOptions, indiaStateNames, stateOptions } from "@/lib/settings-places";
+import { ChoiceSelect, SuggestField } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { Loader2, Plus, Trash2, UserPlus } from "lucide-react";
+import { Calendar, Loader2, Plus, Trash2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import {
   startTransition,
@@ -47,6 +49,57 @@ type DraftLine = {
   quantity: string;
   rate: string;
 };
+
+function IsoDateField({
+  id,
+  name,
+  value,
+  onChange,
+  required,
+  min,
+  max,
+  invalid,
+  describedBy,
+}: {
+  id: string;
+  name: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  min?: string;
+  max?: string;
+  invalid?: boolean;
+  describedBy?: string;
+}) {
+  const display = formatDayMonthYear(value);
+  return (
+    <div className="relative">
+      <input type="hidden" name={name} value={value} />
+      <div
+        className={cn(
+          "flex h-9 items-center rounded-md border border-input bg-transparent px-3 pr-9 text-sm shadow-sm",
+          display ? "text-foreground" : "text-muted-foreground",
+          invalid && "border-destructive",
+        )}
+      >
+        {display || "dd/mm/yyyy"}
+      </div>
+      <input
+        id={id}
+        type="date"
+        required={required}
+        value={value}
+        min={min}
+        max={max}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
+        onChange={(event) => onChange(event.target.value)}
+        className="absolute inset-y-0 right-0 w-10 cursor-pointer opacity-0"
+      />
+      <Calendar className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  );
+}
 
 function Field({
   id,
@@ -216,19 +269,23 @@ function PartyEditor({
       </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field id={`${idPrefix}-state`} label="State">
-          <Input
+          <SuggestField
             id={`${idPrefix}-state`}
+            label="State"
             value={fields.state}
-            onChange={(event) => setField("state", event.target.value)}
             maxLength={80}
+            options={stateOptions(fields.country || "India")}
+            onValue={(next) => setField("state", next)}
           />
         </Field>
         <Field id={`${idPrefix}-city`} label="City">
-          <Input
+          <SuggestField
             id={`${idPrefix}-city`}
+            label="City"
             value={fields.city}
-            onChange={(event) => setField("city", event.target.value)}
             maxLength={80}
+            options={cityOptions(fields.country || "India", fields.state)}
+            onValue={(next) => setField("city", next)}
           />
         </Field>
         <Field id={`${idPrefix}-pincode`} label="Pincode">
@@ -303,6 +360,7 @@ export function InvoiceForm({
     emptyInvoiceFormState,
   );
   const errors = state.fieldErrors;
+  useActionToast(state, state.error, "error");
   const [beneficiaryId, setBeneficiaryId] = useState(invoice?.beneficiaryId ?? "");
   const [billToParty, setBillToParty] = useState<InvoicePartyFields>(() =>
     invoice?.billTo ? parsePartyFields(invoice.billTo) : emptyPartyFields,
@@ -319,6 +377,8 @@ export function InvoiceForm({
   const [stateCode, setStateCode] = useState(invoice?.stateCode ?? "");
   const [clientGstin, setClientGstin] = useState(invoice?.clientGstin ?? "");
   const [dealReference, setDealReference] = useState(invoice?.dealReference ?? "");
+  const [invoiceDate, setInvoiceDate] = useState(invoice?.invoiceDate ?? today);
+  const [dueDate, setDueDate] = useState(invoice?.dueDate ?? "");
   const [tdsAmount, setTdsAmount] = useState(invoice ? String(invoice.tdsAmount) : "0");
   const [lines, setLines] = useState<DraftLine[]>(() => linesFromInvoice(invoice));
   const [amountInWords, setAmountInWords] = useState(invoice?.amountInWords ?? "");
@@ -357,6 +417,10 @@ export function InvoiceForm({
     },
   );
   const currency = invoice?.currency ?? defaults.currency;
+  const gstRateNumber = Number.isFinite(Number(gstRate)) ? Number(gstRate) : 0;
+  const cgstRate = gstEnabled && totals.intrastate ? gstRateNumber / 2 : 0;
+  const sgstRate = cgstRate;
+  const igstRate = gstEnabled && !totals.intrastate ? gstRateNumber : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -434,19 +498,10 @@ export function InvoiceForm({
 
   const content = (
     <fieldset disabled={pending} className={cn("flex min-w-0 flex-col gap-6", inModal && "p-4 sm:p-6")}>
-      {state.error ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
-          {state.error}
-        </p>
-      ) : null}
-
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           <Section title="Invoice details">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="grid content-start gap-2">
                 <p className="text-sm font-medium leading-none">Invoice number</p>
                 <p
@@ -459,26 +514,32 @@ export function InvoiceForm({
                 </p>
               </div>
               <Field id="invoice_date" label="Invoice date" required error={errors.invoice_date}>
-                <Input
+                <IsoDateField
                   id="invoice_date"
                   name="invoice_date"
-                  type="date"
                   required
-                  defaultValue={invoice?.invoiceDate ?? today}
+                  value={invoiceDate}
                   min={dateBounds?.start}
                   max={dateBounds?.end}
-                  aria-invalid={Boolean(errors.invoice_date) || undefined}
-                  aria-describedby={errors.invoice_date ? "invoice_date-error" : undefined}
+                  invalid={Boolean(errors.invoice_date)}
+                  describedBy={errors.invoice_date ? "invoice_date-error" : undefined}
+                  onChange={(value) => {
+                    markDirty();
+                    setInvoiceDate(value);
+                  }}
                 />
               </Field>
               <Field id="due_date" label="Due date" error={errors.due_date}>
-                <Input
+                <IsoDateField
                   id="due_date"
                   name="due_date"
-                  type="date"
-                  defaultValue={invoice?.dueDate ?? ""}
-                  aria-invalid={Boolean(errors.due_date) || undefined}
-                  aria-describedby={errors.due_date ? "due_date-error" : undefined}
+                  value={dueDate}
+                  invalid={Boolean(errors.due_date)}
+                  describedBy={errors.due_date ? "due_date-error" : undefined}
+                  onChange={(value) => {
+                    markDirty();
+                    setDueDate(value);
+                  }}
                 />
               </Field>
               <Field
@@ -532,35 +593,35 @@ export function InvoiceForm({
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field id="place_of_supply" label="Place of supply" error={errors.place_of_supply}>
-                <Input
+                <SuggestField
                   id="place_of_supply"
                   name="place_of_supply"
+                  label="Place of supply"
                   value={placeOfSupply}
                   maxLength={80}
-                  onChange={(event) => setPlaceOfSupply(event.target.value)}
+                  options={indiaStateNames()}
+                  invalid={Boolean(errors.place_of_supply)}
+                  describedBy={errors.place_of_supply ? "place_of_supply-error" : undefined}
+                  onValue={setPlaceOfSupply}
                 />
               </Field>
               <Field id="supply_state" label="State" error={errors.supply_state}>
-                <ChoiceSelect
+                <SuggestField
                   id="supply_state"
+                  name="supply_state"
                   label="State"
                   value={supplyState}
-                  display="label"
+                  maxLength={80}
+                  options={indiaStateNames()}
                   invalid={Boolean(errors.supply_state)}
+                  describedBy={errors.supply_state ? "supply_state-error" : undefined}
                   onValue={(next) => {
                     setSupplyState(next);
                     const fromGstin = stateCodeForParty({ gstin: clientGstin });
-                    setStateCode(fromGstin ?? stateCodeForParty({ state: next }) ?? "");
+                    const fromState = stateCodeForParty({ state: next });
+                    if (fromGstin || fromState) setStateCode(fromGstin ?? fromState ?? "");
                   }}
-                  choices={[
-                    { value: "", label: "Select a state" },
-                    ...indiaStateNames().map((name) => ({ value: name, label: name })),
-                    ...(supplyState && !indiaStateNames().includes(supplyState)
-                      ? [{ value: supplyState, label: supplyState }]
-                      : []),
-                  ]}
                 />
-                <input type="hidden" name="supply_state" value={supplyState} />
               </Field>
               <Field id="state_code" label="State code" error={errors.state_code}>
                 <Input
@@ -859,21 +920,21 @@ export function InvoiceForm({
               />
             </Field>
             <dl className="mt-5 grid gap-2 border-t pt-4 text-sm">
-              <div className="flex justify-between gap-6">
+              <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-muted-foreground">Subtotal</dt>
-                <dd className="tabular-nums">{formatMoney(totals.subtotal, currency)}</dd>
+                <dd className="shrink-0 tabular-nums">{formatMoney(totals.subtotal, currency)}</dd>
               </div>
-              <div className="flex justify-between gap-6">
-                <dt className="text-muted-foreground">CGST @ {formatGstRate(totals.intrastate ? Number(gstRate) / 2 : 0)}%</dt>
-                <dd className="tabular-nums">{formatMoney(totals.cgstAmount, currency)}</dd>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="whitespace-nowrap text-muted-foreground">CGST @ {formatGstRate(cgstRate)}%</dt>
+                <dd className="shrink-0 tabular-nums">{formatMoney(totals.cgstAmount, currency)}</dd>
               </div>
-              <div className="flex justify-between gap-6">
-                <dt className="text-muted-foreground">SGST @ {formatGstRate(totals.intrastate ? Number(gstRate) / 2 : 0)}%</dt>
-                <dd className="tabular-nums">{formatMoney(totals.sgstAmount, currency)}</dd>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="whitespace-nowrap text-muted-foreground">SGST @ {formatGstRate(sgstRate)}%</dt>
+                <dd className="shrink-0 tabular-nums">{formatMoney(totals.sgstAmount, currency)}</dd>
               </div>
-              <div className="flex justify-between gap-6">
-                <dt className="text-muted-foreground">IGST @ {formatGstRate(gstEnabled && !totals.intrastate ? Number(gstRate) : 0)}%</dt>
-                <dd className="tabular-nums">{formatMoney(totals.igstAmount, currency)}</dd>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="whitespace-nowrap text-muted-foreground">IGST @ {formatGstRate(igstRate)}%</dt>
+                <dd className="shrink-0 tabular-nums">{formatMoney(totals.igstAmount, currency)}</dd>
               </div>
               <div className="flex justify-between gap-6 border-t pt-2 font-medium">
                 <dt>Invoice total</dt>
@@ -888,9 +949,12 @@ export function InvoiceForm({
                 <dd className="tabular-nums">{formatMoney(totals.balanceDue, currency)}</dd>
               </div>
             </dl>
-            <p className="mt-3 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-              {amountInWords || "Amount in words follows the balance due."}
-            </p>
+            <div className="mt-3">
+              <p className="text-xs font-medium text-muted-foreground">Amount in words</p>
+              <p className="mt-1 rounded-md bg-muted/60 px-3 py-2 text-sm">
+                {amountInWords || "Amount in words follows the balance due."}
+              </p>
+            </div>
           </Section>
         </div>
       </div>

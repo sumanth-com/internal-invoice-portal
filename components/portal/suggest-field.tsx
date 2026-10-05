@@ -114,11 +114,13 @@ export function SuggestField({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const query = value.trim().toLowerCase();
+  const [filter, setFilter] = useState<string | null>(null);
+  const [navigated, setNavigated] = useState(false);
   const source = choices ?? (options ?? []).map((option) => ({ value: option, label: option }));
+  const query = (filter ?? "").trim().toLowerCase();
   const matches =
-    query.length < 1
-      ? []
+    filter === null || query.length < 1
+      ? [...source]
       : [...source]
           .filter(
             (choice) =>
@@ -131,14 +133,21 @@ export function SuggestField({
               right.label.toLowerCase().startsWith(query) || right.value.toLowerCase().startsWith(query);
             if (leftStarts === rightStarts) return 0;
             return leftStarts ? -1 : 1;
-          })
-          .slice(0, 8);
+          });
   const visible = open && matches.length > 0;
   const { menuRef, host, frame } = useAnchoredMenu(visible, rootRef);
 
   useEffect(() => {
-    setActive(0);
-  }, [value]);
+    if (!open) return;
+    const current = value.trim().toLowerCase();
+    const index = matches.findIndex(
+      (choice) => choice.value.toLowerCase() === current || choice.label.toLowerCase() === current,
+    );
+    setActive(index >= 0 ? index : 0);
+    setNavigated(false);
+    // `matches` is derived from `filter`; including the array would reset keyboard highlight every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, open]);
 
   useEffect(() => {
     if (!visible) return;
@@ -160,7 +169,15 @@ export function SuggestField({
 
   function choose(option: { value: string }) {
     onValue(option.value);
+    setFilter(null);
+    setNavigated(false);
     setOpen(false);
+  }
+
+  function reveal() {
+    setFilter(null);
+    setNavigated(false);
+    setOpen(true);
   }
 
   return (
@@ -182,31 +199,63 @@ export function SuggestField({
         autoComplete="off"
         onChange={(event) => {
           onValue(event.target.value);
+          setFilter(event.target.value);
+          setNavigated(false);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => onBlur?.()}
+        onFocus={reveal}
+        onBlur={() => {
+          window.setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (
+              rootRef.current?.contains(activeElement) ||
+              menuRef.current?.contains(activeElement)
+            ) {
+              return;
+            }
+            setOpen(false);
+          }, 0);
+          onBlur?.();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             setOpen(false);
             return;
           }
-          if (!matches.length) return;
-          if (event.key === "ArrowDown") {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            setOpen(true);
-            setActive((current) => (current + 1) % matches.length);
-          } else if (event.key === "ArrowUp") {
+            if (!open) reveal();
+            if (!matches.length) return;
+            const step = event.key === "ArrowDown" ? 1 : -1;
+            setNavigated(true);
+            setActive((current) => (current + step + matches.length) % matches.length);
+            return;
+          }
+          if (event.key === "Enter" && visible) {
             event.preventDefault();
-            setOpen(true);
-            setActive((current) => (current - 1 + matches.length) % matches.length);
-          } else if (event.key === "Enter" && visible) {
-            event.preventDefault();
-            choose(matches[active] ?? matches[0]);
+            if (navigated || filter !== null) choose(matches[active] ?? matches[0]);
+            else setOpen(false);
           }
         }}
-        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+        className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 pr-8 text-base shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          invalid && "border-destructive",
+        )}
       />
+      <button
+        type="button"
+        tabIndex={-1}
+        disabled={disabled || source.length === 0}
+        aria-label={`Show ${label} options`}
+        className="absolute inset-y-0 right-0 flex items-center px-2 text-muted-foreground disabled:opacity-40"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          if (open) setOpen(false);
+          else reveal();
+        }}
+      >
+        <ChevronDown className="size-4" />
+      </button>
       <AnchoredMenu
         open={visible}
         host={host}

@@ -74,11 +74,15 @@ export function ReportsView({
   invoices,
   type,
   query,
+  beneficiaries,
+  beneficiary,
 }: {
   data: ReportView;
   invoices: ReportInvoice[];
   type: ReportType;
   query: string;
+  beneficiaries: { id: string; name: string }[];
+  beneficiary: string;
 }) {
   const router = useRouter();
   const [source, setSource] = useState(data);
@@ -86,6 +90,7 @@ export function ReportsView({
   const [from, setFrom] = useState(data.from);
   const [to, setTo] = useState(data.to);
   const [search, setSearch] = useState(query);
+  const [client, setClient] = useState(beneficiary);
 
   if (source !== data) {
     setSource(data);
@@ -93,24 +98,28 @@ export function ReportsView({
     setFrom(data.from);
     setTo(data.to);
     setSearch(query);
+    setClient(beneficiary);
   }
 
   const periodReady = Boolean(data.from && data.to && !data.error);
-  const filtering = reportType !== "all" || search.trim().length > 0 || data.range === "custom";
-  const excelHref = periodReady ? reportExportHref("xlsx", { from: data.from, to: data.to, type, query }) : "";
-  const pdfHref = periodReady ? reportExportHref("pdf", { from: data.from, to: data.to, type, query }) : "";
+  const filtering =
+    reportType !== "all" || search.trim().length > 0 || data.range === "custom" || Boolean(beneficiary);
+  const exportFilters = { from: data.from, to: data.to, type, query, beneficiary };
+  const excelHref = periodReady ? reportExportHref("xlsx", exportFilters) : "";
+  const pdfHref = periodReady ? reportExportHref("pdf", exportFilters) : "";
 
   const pushFilters = useCallback(
-    (next?: { type?: ReportType; from?: string; to?: string; search?: string }) => {
+    (next?: { type?: ReportType; from?: string; to?: string; search?: string; beneficiary?: string }) => {
       const href = reportPageHref({
         type: next?.type ?? reportType,
         from: next?.from ?? from,
         to: next?.to ?? to,
         query: next?.search ?? search,
+        beneficiary: next?.beneficiary ?? client,
       });
       startTransition(() => router.push(href));
     },
-    [reportType, from, to, search, router],
+    [reportType, from, to, search, client, router],
   );
 
   useEffect(() => {
@@ -123,12 +132,13 @@ export function ReportsView({
   function showAll() {
     setReportType("all");
     setSearch("");
+    setClient("");
     startTransition(() => router.push("/reports"));
   }
 
   const rows = sortedInvoices(invoices);
-  const beneficiaries = reportBeneficiaryRows(invoices);
-  const empty = rows.length === 0 || (type === "beneficiaries" && beneficiaries.length === 0);
+  const beneficiaryRows = reportBeneficiaryRows(invoices);
+  const empty = rows.length === 0 || (type === "beneficiaries" && beneficiaryRows.length === 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -168,7 +178,7 @@ export function ReportsView({
             </p>
           </div>
           <form
-            className="flex items-center gap-2 overflow-x-auto"
+            className="flex flex-wrap items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               pushFilters({ search: search.trim() });
@@ -187,6 +197,23 @@ export function ReportsView({
               {REPORT_TYPES.map((item) => (
                 <option key={item} value={item}>
                   {REPORT_TYPE_LABELS[item]}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label="Beneficiary"
+              value={client}
+              onChange={(value) => {
+                const next = beneficiaries.some((item) => item.id === value) ? value : "";
+                setClient(next);
+                pushFilters({ beneficiary: next });
+              }}
+              className="w-52"
+            >
+              <option value="">All beneficiaries</option>
+              {beneficiaries.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
                 </option>
               ))}
             </FilterSelect>
@@ -238,21 +265,21 @@ export function ReportsView({
           </div>
         ) : type === "beneficiaries" ? (
           <ReportTable
-            countLabel={beneficiaries.length === 1 ? "1 beneficiary." : `${beneficiaries.length} beneficiaries.`}
+            countLabel={beneficiaryRows.length === 1 ? "1 beneficiary." : `${beneficiaryRows.length} beneficiaries.`}
           >
             <thead className="sticky top-0 z-10">
-              <tr className="text-left text-muted-foreground">
+              <tr className="text-center text-primary-foreground">
                 <Th>Beneficiary</Th>
-                <Th align="right">Invoices</Th>
-                <Th align="right">Value</Th>
+                <Th>Invoices</Th>
+                <Th>Value</Th>
               </tr>
             </thead>
             <tbody>
-              {beneficiaries.map((row) => (
-                <tr key={row.id}>
+              {beneficiaryRows.map((row) => (
+                <tr key={row.id} className="hover:bg-muted/40">
                   <Td className="font-medium">{row.name}</Td>
-                  <Td align="right">{row.count}</Td>
-                  <Td align="right">{row.valueLabel}</Td>
+                  <Td>{row.count}</Td>
+                  <Td>{row.valueLabel}</Td>
                 </tr>
               ))}
             </tbody>
@@ -260,58 +287,59 @@ export function ReportsView({
         ) : (
           <ReportTable countLabel={rows.length === 1 ? "1 invoice." : `${rows.length} invoices.`}>
             <thead className="sticky top-0 z-10">
-              <tr className="text-left text-muted-foreground">
-                <Th>Invoice</Th>
-                <Th>Beneficiary</Th>
-                <Th>Date</Th>
+              <tr className="text-center text-primary-foreground">
+                <Th className="w-[15%]">Invoice</Th>
+                <Th className="w-[13%]">Beneficiary</Th>
                 {type !== "gst" && type !== "payments" ? <Th>Status</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">Subtotal</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">CGST</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">SGST</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">IGST</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">Total GST</Th> : null}
-                {type === "all" || type === "gst" ? <Th align="right">TDS</Th> : null}
-                {type === "all" || type === "gst" || type === "outstanding" ? <Th align="right">Balance due</Th> : null}
+                {type === "all" || type === "gst" ? <Th>Subtotal</Th> : null}
+                {type === "all" || type === "gst" ? <Th>CGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th>SGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th>IGST</Th> : null}
+                {type === "all" || type === "gst" ? <Th>Total GST</Th> : null}
+                {type === "all" || type === "gst" ? <Th>TDS</Th> : null}
+                {type === "all" || type === "gst" || type === "outstanding" ? <Th>Balance due</Th> : null}
                 {type === "payments" ? <Th>Mode</Th> : null}
-                {type === "all" || type === "outstanding" || type === "payments" ? <Th align="right">Paid</Th> : null}
-                {type === "all" || type === "outstanding" || type === "payments" ? <Th align="right">Outstanding</Th> : null}
-                <Th align="right">Total</Th>
+                {type === "all" || type === "outstanding" || type === "payments" ? <Th>Paid</Th> : null}
+                {type === "all" || type === "outstanding" || type === "payments" ? <Th>Outstanding</Th> : null}
+                <Th>Total</Th>
               </tr>
             </thead>
             <tbody>
               {rows.map((invoice) => {
                 const currency = invoice.currency || data.currency;
                 return (
-                  <tr key={invoice.id}>
-                    <Td className="font-medium whitespace-nowrap">
-                      <Link href={`/invoices/${invoice.id}`} className="underline-offset-4 hover:underline">
+                  <tr key={invoice.id} className="hover:bg-muted/40">
+                    <Td>
+                      <Link href={`/invoices/${invoice.id}`} className="font-medium underline-offset-4 hover:underline">
                         {invoice.number}
                       </Link>
+                      <p className="mt-0.5 text-[11px] font-normal leading-4 text-muted-foreground">
+                        {formatInvoiceDate(invoice.date)}
+                      </p>
                     </Td>
-                    <Td>{invoice.beneficiaryName}</Td>
-                    <Td className="whitespace-nowrap text-muted-foreground">{formatInvoiceDate(invoice.date)}</Td>
+                    <Td className="break-words">{invoice.beneficiaryName}</Td>
                     {type !== "gst" && type !== "payments" ? (
                       <Td>
                         <Badge variant={statusVariant(invoice.status)}>{statusLabel(invoice.status)}</Badge>
                       </Td>
                     ) : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.subtotal, currency)}</Td> : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.cgstAmount, currency)}</Td> : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.sgstAmount, currency)}</Td> : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.igstAmount, currency)}</Td> : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.gstAmount, currency)}</Td> : null}
-                    {type === "all" || type === "gst" ? <Td align="right">{money(invoice.tdsAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.subtotal, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.cgstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.sgstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.igstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.gstAmount, currency)}</Td> : null}
+                    {type === "all" || type === "gst" ? <Td>{money(invoice.tdsAmount, currency)}</Td> : null}
                     {type === "all" || type === "gst" || type === "outstanding" ? (
-                      <Td align="right">{money(invoice.balanceDue, currency)}</Td>
+                      <Td>{money(invoice.balanceDue, currency)}</Td>
                     ) : null}
                     {type === "payments" ? <Td>{modes(invoice)}</Td> : null}
                     {type === "all" || type === "outstanding" || type === "payments" ? (
-                      <Td align="right">{money(invoice.amountPaid, currency)}</Td>
+                      <Td>{money(invoice.amountPaid, currency)}</Td>
                     ) : null}
                     {type === "all" || type === "outstanding" || type === "payments" ? (
-                      <Td align="right">{money(invoice.outstanding, currency)}</Td>
+                      <Td>{money(invoice.outstanding, currency)}</Td>
                     ) : null}
-                    <Td align="right">{money(invoice.total, currency)}</Td>
+                    <Td>{money(invoice.total, currency)}</Td>
                   </tr>
                 );
               })}
@@ -326,34 +354,29 @@ export function ReportsView({
 function ReportTable({ children, countLabel }: { children: ReactNode; countLabel: string }) {
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[72rem] border-separate border-spacing-0 text-sm">{children}</table>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <table className="w-full table-fixed border-separate border-spacing-0 text-xs">{children}</table>
       </div>
       <p className="shrink-0 border-t px-4 py-3 text-sm text-muted-foreground">{countLabel}</p>
     </>
   );
 }
 
-function Th({ children, align }: { children: ReactNode; align?: "right" }) {
+function Th({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <th className={cn("border-b bg-card px-4 py-3 font-medium whitespace-nowrap", align === "right" && "text-right")}>
+    <th
+      className={cn(
+        "border-b border-primary bg-primary px-1.5 py-2.5 text-center align-middle text-[11px] font-medium leading-tight",
+        className,
+      )}
+    >
       {children}
     </th>
   );
 }
 
-function Td({
-  children,
-  align,
-  className,
-}: {
-  children: ReactNode;
-  align?: "right";
-  className?: string;
-}) {
+function Td({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <td className={cn("border-b px-4 py-3 align-middle", align === "right" && "text-right tabular-nums", className)}>
-      {children}
-    </td>
+    <td className={cn("border-b px-1.5 py-2.5 text-center align-middle tabular-nums", className)}>{children}</td>
   );
 }

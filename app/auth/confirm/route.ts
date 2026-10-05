@@ -38,7 +38,13 @@ export async function GET(request: NextRequest) {
         }
         redirect("/auth/activate");
       }
-      if (type === "recovery") redirect("/auth/reset-password");
+      if (type === "recovery") {
+        const { data: session } = await supabase.auth.getClaims();
+        const pending =
+          (session?.claims?.app_metadata as { invitation_pending?: unknown } | undefined)
+            ?.invitation_pending === true;
+        redirect(pending ? "/auth/activate" : "/auth/reset-password");
+      }
       redirect(next);
     } else {
       // redirect the user to an error page with some instructions

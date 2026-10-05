@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -19,12 +19,13 @@ function emailError(value: string) {
 }
 
 const fieldClass =
-  "h-11 rounded-lg border-neutral-200 bg-white px-3.5 text-neutral-950 shadow-none placeholder:text-neutral-400 focus-visible:border-[hsl(262,83%,58%)] focus-visible:ring-[hsl(262,83%,58%)] dark:border-[hsl(220,28%,22%)] dark:bg-[hsl(223,46%,11%)] dark:text-white dark:placeholder:text-[hsl(217,16%,62%)]";
+  "h-12 rounded-xl border-transparent bg-[#f3f6fb] pl-11 text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[#2563eb] focus-visible:ring-[#2563eb] dark:border-white/10 dark:bg-[#121a30] dark:text-white dark:placeholder:text-slate-500";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -63,45 +64,49 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="grid gap-4" noValidate>
-      <div className="mb-3 text-center">
-        <div className="flex justify-center">
-          <PortalLogo size={44} priority />
+      <div className="mb-1 text-center">
+        <div className="mb-4 flex justify-center">
+          <PortalLogo size={44} priority className="rounded-xl" />
         </div>
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-neutral-950 dark:text-white">Welcome back</h1>
-        <p className="mt-2 text-sm text-neutral-500 dark:text-[hsl(217,18%,70%)]">Sign in to your account</p>
+        <h1 className="text-[1.7rem] font-semibold tracking-tight text-slate-950 dark:text-white">Welcome Back</h1>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Please Login to your enterprise account</p>
       </div>
       {error ? (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
           {error}
         </p>
       ) : null}
       <div className="grid gap-4 text-left">
         <div className="grid gap-2">
-          <Label htmlFor="email" className="text-sm font-medium text-neutral-800 dark:text-[hsl(210,20%,92%)]">
-            Email
+          <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            Corporate ID or Email
           </Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="Enter your email address"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            aria-invalid={fieldErrors.email ? true : undefined}
-            className={cn(fieldClass, fieldErrors.email && "border-red-400 focus-visible:border-red-500 focus-visible:ring-red-500")}
-          />
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="treasury.officer@domain.corp"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={fieldErrors.email ? true : undefined}
+              className={cn(fieldClass, fieldErrors.email && "border-red-400 focus-visible:border-red-500 focus-visible:ring-red-500")}
+            />
+          </div>
           {fieldErrors.email ? <p className="text-sm text-red-600">{fieldErrors.email}</p> : null}
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="password" className="text-sm font-medium text-neutral-800 dark:text-[hsl(210,20%,92%)]">
+          <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-200">
             Password
           </Label>
           <div className="relative">
+            <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
-              placeholder="Enter your password"
+              placeholder="••••••••"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               aria-invalid={fieldErrors.password ? true : undefined}
@@ -113,7 +118,7 @@ export function LoginForm() {
             />
             <button
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white"
               aria-label={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword((current) => !current)}
             >
@@ -121,21 +126,32 @@ export function LoginForm() {
             </button>
           </div>
           {fieldErrors.password ? <p className="text-sm text-red-600">{fieldErrors.password}</p> : null}
-          <div className="flex justify-end pt-1">
-            <Link href="/auth/forgot-password" className="text-sm font-medium text-neutral-900 hover:text-neutral-600 dark:text-[hsl(210,20%,92%)] dark:hover:text-white">
-              Forgot password
-            </Link>
-          </div>
         </div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={(event) => setRememberDevice(event.target.checked)}
+            className="size-4 rounded border-slate-300 text-[#2563eb] focus:ring-[#2563eb]"
+          />
+          Remember this device
+        </label>
+        <Link href="/auth/forgot-password" className="text-sm font-medium text-[#2563eb] hover:text-[#1d4ed8]">
+          Forgot Password?
+        </Link>
       </div>
       <Button
         type="submit"
-        className="mt-1 h-11 w-full rounded-lg bg-[hsl(262,83%,58%)] text-white shadow-none hover:bg-[hsl(262,83%,52%)]"
+        className="mt-1 h-12 w-full rounded-xl bg-[#2563eb] text-sm font-semibold tracking-[0.12em] text-white shadow-none hover:bg-[#1d4ed8]"
         disabled={isLoading}
       >
         {isLoading ? <Loader2 className="animate-spin" /> : null}
-        {isLoading ? "Signing in…" : "Sign in"}
+        {isLoading ? "SIGNING IN" : "LOGIN"}
+        {isLoading ? null : <ArrowRight className="size-4" />}
       </Button>
+      <p className="mt-2 text-center text-[11px] text-slate-400">iFranchise Services Private Limited</p>
     </form>
   );
 }

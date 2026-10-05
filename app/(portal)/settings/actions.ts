@@ -142,7 +142,7 @@ export async function saveGstDefaults(
     .from("company_settings")
     .update(parsed.value)
     .eq("id", true)
-    .select("default_gst_enabled, default_gst_rate, gstin, pan");
+    .select("default_gst_enabled, default_gst_rate, gstin, pan, cin");
 
   if (updated.error || !updated.data?.[0]) {
     return {
@@ -161,6 +161,7 @@ export async function saveGstDefaults(
       defaultGstRate: Number(saved.default_gst_rate),
       gstin: saved.gstin?.trim() ?? "",
       pan: saved.pan?.trim() ?? "",
+      cin: saved.cin?.trim() ?? "",
     },
   };
 }

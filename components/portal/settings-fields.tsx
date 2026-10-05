@@ -1,48 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export const settingsTextareaClass =
   "flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-
-export function useTimedFlag(source: unknown, ms = 2500) {
-  const [visible, setVisible] = useState(false);
-  const seen = useRef<unknown>(undefined);
-
-  useEffect(() => {
-    if (source == null || seen.current === source) return;
-    seen.current = source;
-    setVisible(true);
-    const timer = window.setTimeout(() => setVisible(false), ms);
-    return () => window.clearTimeout(timer);
-  }, [source, ms]);
-
-  return visible;
-}
-
-export function SettingsSaved({
-  show,
-  children,
-  className,
-}: {
-  show: boolean;
-  children: string;
-  className?: string;
-}) {
-  if (!show) return null;
-  return (
-    <p
-      role="status"
-      className={cn(
-        "pointer-events-none absolute right-4 bottom-16 z-10 whitespace-nowrap rounded-md border border-emerald-600/20 bg-emerald-600/10 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm dark:text-emerald-200 sm:bottom-auto sm:right-6 sm:top-14",
-        className,
-      )}
-    >
-      {children}
-    </p>
-  );
-}
 
 export function SettingsSection({
   title,
@@ -68,28 +30,6 @@ export function SettingsSection({
       </div>
       <div className="mt-5 flex min-h-0 flex-1 flex-col">{children}</div>
     </section>
-  );
-}
-
-export function SettingsNotice({
-  tone,
-  children,
-}: {
-  tone: "success" | "error";
-  children: string;
-}) {
-  return (
-    <p
-      role={tone === "error" ? "alert" : "status"}
-      className={cn(
-        "rounded-lg border px-4 py-3 text-sm",
-        tone === "error"
-          ? "border-destructive/30 bg-destructive/10 text-destructive"
-          : "border-emerald-600/20 bg-emerald-600/10 text-emerald-800 dark:text-emerald-200",
-      )}
-    >
-      {children}
-    </p>
   );
 }
 

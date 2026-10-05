@@ -1,19 +1,21 @@
 "use client";
 
+import { fetchInvoiceDraft, type InvoiceDraftResult } from "@/app/(portal)/invoices/actions";
 import { BeneficiaryForm } from "@/components/portal/beneficiary-form";
 import { InvoiceForm } from "@/components/portal/invoice-form";
 import { Modal, ModalBody, ModalFooter } from "@/components/portal/modal";
 import { Button } from "@/components/ui/button";
 import type { Beneficiary } from "@/lib/beneficiary";
 import { invoiceToday } from "@/lib/invoice";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import {
   prefetchInvoiceFormOptions,
   upsertInvoiceBeneficiary,
   useInvoiceFormOptions,
 } from "@/lib/invoice-options-store";
-import { cn } from "@/lib/utils";
+import { useToasts, type ToastTone } from "@/components/portal/toasts";
 import { UserPlus } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
   Suspense,
@@ -33,12 +35,11 @@ type BeneficiaryRequest = {
   onSaved?: (beneficiary: Beneficiary) => void;
 };
 
-type Notice = { id: number; message: string; tone: "success" | "error" };
-
 type PortalModalsValue = {
   openCreateInvoice: () => void;
+  openEditInvoice: (id: string) => void;
   openBeneficiary: (request?: BeneficiaryRequest) => void;
-  notify: (message: string, tone?: Notice["tone"]) => void;
+  notify: (message: string, tone?: ToastTone) => void;
   subscribeBeneficiarySaved: (handler: BeneficiarySavedHandler) => () => void;
 };
 
@@ -84,6 +85,62 @@ function FormSkeleton() {
         Loading the invoice form…
       </p>
     </ModalBody>
+  );
+}
+
+function EditInvoiceContent({
+  id,
+  openBeneficiary,
+  onClose,
+}: {
+  id: string;
+  openBeneficiary: (request?: BeneficiaryRequest) => void;
+  onClose: () => void;
+}) {
+  const [result, setResult] = useState<InvoiceDraftResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchInvoiceDraft(id).then((next) => {
+      if (!cancelled) setResult(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (!result) return <FormSkeleton />;
+
+  if (!result.ok) {
+    return (
+      <>
+        <ModalBody>
+          <div className="p-6">
+            <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {result.error}
+            </p>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </ModalFooter>
+      </>
+    );
+  }
+
+  return (
+    <InvoiceForm
+      mode="edit"
+      variant="modal"
+      invoice={result.invoice}
+      beneficiaries={result.options.beneficiaries}
+      bankAccounts={result.options.bankAccounts}
+      defaults={result.options.defaults}
+      today={result.invoice.invoiceDate}
+      onAddBeneficiary={(onSaved) => openBeneficiary({ onSaved })}
+    />
   );
 }
 
@@ -160,55 +217,23 @@ function CreateInvoiceContent({
   );
 }
 
-function Notices({ notices, dismiss }: { notices: Notice[]; dismiss: (id: number) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || typeof element.showPopover !== "function") return;
-    if (notices.length === 0) {
-      if (element.matches(":popover-open")) element.hidePopover();
-      return;
-    }
-    if (element.matches(":popover-open")) element.hidePopover();
-    element.showPopover();
-  }, [notices]);
-
-  return (
-    <div
-      ref={ref}
-      popover="manual"
-      aria-live="polite"
-      className="fixed inset-x-4 bottom-4 top-auto m-0 w-auto flex-col gap-2 overflow-visible border-0 bg-transparent p-0 sm:left-auto sm:right-6 sm:w-96 [&:popover-open]:flex"
-    >
-      {notices.map((notice) => (
-        <p
-          key={notice.id}
-          role={notice.tone === "error" ? "alert" : "status"}
-          onClick={() => dismiss(notice.id)}
-          className={cn(
-            "cursor-default rounded-lg border px-4 py-3 text-sm shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-200",
-            notice.tone === "error"
-              ? "border-destructive/30 bg-card text-destructive"
-              : "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100",
-          )}
-        >
-          {notice.message}
-        </p>
-      ))}
-    </div>
-  );
-}
-
 function DismissModalsOnNavigate({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname();
-  const lastPathname = useRef(pathname);
+  const searchParams = useSearchParams();
+  const location = `${pathname}?${searchParams.toString()}`;
+  const lastLocation = useRef(location);
 
   useEffect(() => {
-    if (lastPathname.current === pathname) return;
-    lastPathname.current = pathname;
-    onNavigate();
-  }, [onNavigate, pathname]);
+    if (searchParams.get("edit") === "1") {
+      lastLocation.current = location;
+      return;
+    }
+    if (lastLocation.current === location) return;
+    const previous = lastLocation.current;
+    lastLocation.current = location;
+    const pathChanged = previous.split("?")[0] !== pathname;
+    if (pathChanged || searchParams.get("notice") === "saved") onNavigate();
+  }, [location, onNavigate, pathname, searchParams]);
 
   return null;
 }
@@ -216,29 +241,27 @@ function DismissModalsOnNavigate({ onNavigate }: { onNavigate: () => void }) {
 export function PortalModalsProvider({ children }: { children: ReactNode }) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceSession, setInvoiceSession] = useState(0);
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
   const [beneficiaryOpen, setBeneficiaryOpen] = useState(false);
   const [beneficiaryRequest, setBeneficiaryRequest] = useState<
     (BeneficiaryRequest & { session: number }) | null
   >(null);
-  const [notices, setNotices] = useState<Notice[]>([]);
   const subscribers = useRef(new Set<BeneficiarySavedHandler>());
-  const noticeId = useRef(0);
+  const { notify } = useToasts();
   const dismissOnNavigate = useCallback(() => {
     setInvoiceOpen(false);
     setBeneficiaryOpen(false);
   }, []);
 
-  const notify = useCallback((message: string, tone: Notice["tone"] = "success") => {
-    noticeId.current += 1;
-    const id = noticeId.current;
-    setNotices((current) => [...current, { id, message, tone }]);
-    window.setTimeout(() => {
-      setNotices((current) => current.filter((notice) => notice.id !== id));
-    }, 4000);
-  }, []);
-
   const openCreateInvoice = useCallback(() => {
     prefetchInvoiceFormOptions();
+    setEditInvoiceId(null);
+    setInvoiceSession((session) => session + 1);
+    setInvoiceOpen(true);
+  }, []);
+
+  const openEditInvoice = useCallback((id: string) => {
+    setEditInvoiceId(id);
     setInvoiceSession((session) => session + 1);
     setInvoiceOpen(true);
   }, []);
@@ -266,13 +289,14 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
       subscribers.current.forEach((handler) => handler(beneficiary, mode));
       setBeneficiaryOpen(false);
       notify(mode === "create" ? "Beneficiary added." : "Beneficiary saved.");
+      requestNotificationRefresh();
     },
     [beneficiaryRequest, notify],
   );
 
   const value = useMemo(
-    () => ({ openCreateInvoice, openBeneficiary, notify, subscribeBeneficiarySaved }),
-    [openCreateInvoice, openBeneficiary, notify, subscribeBeneficiarySaved],
+    () => ({ openCreateInvoice, openEditInvoice, openBeneficiary, notify, subscribeBeneficiarySaved }),
+    [openCreateInvoice, openEditInvoice, openBeneficiary, notify, subscribeBeneficiarySaved],
   );
 
   const editing = Boolean(beneficiaryRequest?.beneficiary);
@@ -288,15 +312,32 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
         open={invoiceOpen}
         onClose={closeInvoice}
         size="xl"
-        title="Create invoice"
-        description="Save a draft. The invoice number is assigned by the database when the draft is saved."
-        discardMessage="This invoice has not been saved. Closing now discards it."
+        title={editInvoiceId ? "Edit draft" : "Create invoice"}
+        description={
+          editInvoiceId
+            ? "The invoice number stays with this draft. Saving updates the same draft."
+            : "Save a draft. The invoice number is assigned by the database when the draft is saved."
+        }
+        discardMessage={
+          editInvoiceId
+            ? "Your edits to this invoice have not been saved."
+            : "This invoice has not been saved. Closing now discards it."
+        }
       >
-        <CreateInvoiceContent
-          key={invoiceSession}
-          openBeneficiary={openBeneficiary}
-          onClose={closeInvoice}
-        />
+        {editInvoiceId ? (
+          <EditInvoiceContent
+            key={`${invoiceSession}-${editInvoiceId}`}
+            id={editInvoiceId}
+            openBeneficiary={openBeneficiary}
+            onClose={closeInvoice}
+          />
+        ) : (
+          <CreateInvoiceContent
+            key={invoiceSession}
+            openBeneficiary={openBeneficiary}
+            onClose={closeInvoice}
+          />
+        )}
       </Modal>
 
       <Modal
@@ -326,10 +367,6 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
         ) : null}
       </Modal>
 
-      <Notices
-        notices={notices}
-        dismiss={(id) => setNotices((current) => current.filter((notice) => notice.id !== id))}
-      />
     </PortalModalsContext.Provider>
   );
 }

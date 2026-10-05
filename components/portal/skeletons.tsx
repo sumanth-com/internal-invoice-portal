@@ -6,7 +6,12 @@ function Bar({ className }: { className?: string }) {
 
 export function StatCardsSkeleton({ count }: { count: number }) {
   return (
-    <div className={cn("grid gap-4", count === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4")}>
+    <div
+      className={cn(
+        "grid gap-4",
+        count === 3 ? "sm:grid-cols-3" : count === 5 ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-2 lg:grid-cols-4",
+      )}
+    >
       {Array.from({ length: count }, (_, index) => (
         <div key={index} className="rounded-xl border bg-card p-4 shadow-sm">
           <Bar className="h-4 w-24" />

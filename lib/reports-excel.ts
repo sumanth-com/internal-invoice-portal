@@ -33,6 +33,7 @@ export async function reportWorkbook(input: {
   view: ReportView;
   invoices: ReportInvoice[];
   query: string;
+  beneficiary: string;
   generatedAt: string;
 }) {
   const workbook = new ExcelJS.Workbook();
@@ -50,6 +51,7 @@ export async function reportWorkbook(input: {
     { field: "From", value: dateValue(input.view.from) },
     { field: "To", value: dateValue(input.view.to) },
     { field: "Search", value: input.query || "—" },
+    { field: "Beneficiary", value: input.beneficiary || "All beneficiaries" },
     { field: "Generated", value: input.generatedAt },
     { field: "Currency", value: input.view.currency },
     { field: "Total invoices", value: input.invoices.length },

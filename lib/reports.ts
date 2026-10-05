@@ -228,12 +228,31 @@ export function reportCardFromParams(type: ReportType, card: string | undefined)
   return null;
 }
 
+const BENEFICIARY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function beneficiaryIdFromParam(value: string | undefined) {
+  const id = value?.trim() ?? "";
+  return BENEFICIARY_ID.test(id) ? id : "";
+}
+
+export function reportBeneficiaryOptions(invoices: ReportInvoice[]) {
+  const names = new Map<string, string>();
+  for (const invoice of invoices) {
+    if (!names.has(invoice.beneficiaryId)) names.set(invoice.beneficiaryId, invoice.beneficiaryName);
+  }
+  return [...names.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function filterReportInvoices(
   invoices: ReportInvoice[],
-  options: { type: ReportType; query: string },
+  options: { type: ReportType; query: string; beneficiaryId?: string },
 ) {
   const query = options.query.trim().toLowerCase();
+  const beneficiaryId = options.beneficiaryId ?? "";
   return invoices.filter((invoice) => {
+    if (beneficiaryId && invoice.beneficiaryId !== beneficiaryId) return false;
     if (query) {
       const haystack = [
         invoice.number,
@@ -281,6 +300,7 @@ export function reportPageHref(options: {
   from?: string;
   to?: string;
   query?: string;
+  beneficiary?: string;
 }) {
   const params = new URLSearchParams();
   const type = options.type ?? "all";
@@ -291,13 +311,15 @@ export function reportPageHref(options: {
   if (options.from || options.to) params.set("range", "custom");
   const query = options.query?.trim();
   if (query) params.set("q", query);
+  const beneficiary = beneficiaryIdFromParam(options.beneficiary);
+  if (beneficiary) params.set("beneficiary", beneficiary);
   const search = params.toString();
   return search ? `/reports?${search}` : "/reports";
 }
 
 export function reportExportHref(
   format: "xlsx" | "pdf",
-  options: { from: string; to: string; type: ReportType; query: string },
+  options: { from: string; to: string; type: ReportType; query: string; beneficiary?: string },
 ) {
   const params = new URLSearchParams({
     format,
@@ -308,6 +330,8 @@ export function reportExportHref(
   });
   const query = options.query.trim();
   if (query) params.set("q", query);
+  const beneficiary = beneficiaryIdFromParam(options.beneficiary);
+  if (beneficiary) params.set("beneficiary", beneficiary);
   return `/reports/export?${params.toString()}`;
 }
 

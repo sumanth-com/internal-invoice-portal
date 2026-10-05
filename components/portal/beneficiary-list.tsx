@@ -126,12 +126,18 @@ function applySaved(data: BeneficiaryListData, saved: BeneficiarySummary): Benef
   }
 
   const matchesStatus = data.status === "all" || (data.status === "active") === saved.isActive;
+  const matchesContact = !data.contact || saved.contactName?.trim() === data.contact;
   const others = data.beneficiaries.filter((item) => item.id !== saved.id);
-  const beneficiaries = matchesStatus
-    ? [...others, saved].sort((left, right) => left.legalName.localeCompare(right.legalName, "en"))
-    : others;
+  const beneficiaries =
+    matchesStatus && matchesContact
+      ? [...others, saved].sort((left, right) => left.legalName.localeCompare(right.legalName, "en"))
+      : others;
+  const contactNames =
+    saved.contactName?.trim() && !data.contactNames.includes(saved.contactName.trim())
+      ? [...data.contactNames, saved.contactName.trim()].sort((left, right) => left.localeCompare(right, "en"))
+      : data.contactNames;
 
-  return { ...data, total, active, inactive, beneficiaries };
+  return { ...data, total, active, inactive, beneficiaries, contactNames };
 }
 
 function FilterSelect({
@@ -183,6 +189,7 @@ export function BeneficiaryList({
   const [data, setData] = useState(serverData);
   const [search, setSearch] = useState(serverData.search);
   const [status, setStatus] = useState<BeneficiaryStatusFilter>(serverData.status);
+  const [contact, setContact] = useState(serverData.contact);
   const [deleting, setDeleting] = useState<BeneficiarySummary | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
@@ -196,24 +203,26 @@ export function BeneficiaryList({
     setData(serverData);
     setSearch(serverData.search);
     setStatus(serverData.status);
+    setContact(serverData.contact);
   }
 
   useBeneficiarySaved((saved) => {
     setData((current) => applySaved(current, toSummary(saved)));
   });
 
-  const filtering = data.search.length > 0 || data.status !== "all";
+  const filtering = data.search.length > 0 || data.status !== "all" || data.contact.length > 0;
   const emptyPortal = data.total === 0 && !filtering;
 
   const pushFilters = useCallback(
-    (next?: { search?: string; status?: BeneficiaryStatusFilter }) => {
+    (next?: { search?: string; status?: BeneficiaryStatusFilter; contact?: string }) => {
       const href = beneficiaryListHref({
         search: next?.search ?? search,
         status: next?.status ?? status,
+        contact: next?.contact ?? contact,
       });
       startTransition(() => router.push(href));
     },
-    [search, status, router],
+    [search, status, contact, router],
   );
 
   useEffect(() => {
@@ -257,17 +266,13 @@ export function BeneficiaryList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      {notice ? (
-        <div className="shrink-0">
-          <BeneficiaryNotice notice={notice} />
-        </div>
-      ) : null}
+      {notice ? <BeneficiaryNotice notice={notice} /> : null}
 
       <div className="grid shrink-0 gap-3 sm:grid-cols-3">
         <StatCard
           label="Total beneficiaries"
           value={data.total}
-          href={beneficiaryListHref({ search, status: "all" })}
+          href={beneficiaryListHref({ search, status: "all", contact })}
           active={status === "all"}
           icon={Users}
           tone="total"
@@ -275,7 +280,7 @@ export function BeneficiaryList({
         <StatCard
           label="Active"
           value={data.active}
-          href={beneficiaryListHref({ search, status: "active" })}
+          href={beneficiaryListHref({ search, status: "active", contact })}
           active={status === "active"}
           icon={CircleCheck}
           tone="active"
@@ -283,7 +288,7 @@ export function BeneficiaryList({
         <StatCard
           label="Inactive"
           value={data.inactive}
-          href={beneficiaryListHref({ search, status: "inactive" })}
+          href={beneficiaryListHref({ search, status: "inactive", contact })}
           active={status === "inactive"}
           icon={CircleOff}
           tone="inactive"
@@ -295,7 +300,9 @@ export function BeneficiaryList({
           <div>
             <h2 className="text-base font-semibold">{filtering ? "Matching beneficiaries" : "All beneficiaries"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filtering ? "Beneficiaries matching your search." : "Active and inactive beneficiary records."}
+              {filtering
+                ? "Beneficiaries matching your search or client legal name."
+                : "Active and inactive beneficiary records."}
             </p>
           </div>
           <form
@@ -315,6 +322,22 @@ export function BeneficiaryList({
                 className="h-9 py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
               />
             </div>
+            <FilterSelect
+              label="Client legal name"
+              value={contact}
+              onChange={(value) => {
+                setContact(value);
+                pushFilters({ contact: value });
+              }}
+              className="w-52"
+            >
+              <option value="">Client legal name</option>
+              {data.contactNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </FilterSelect>
             <FilterSelect
               label="Status"
               value={status}
@@ -346,16 +369,18 @@ export function BeneficiaryList({
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
+              <table className="w-full min-w-[64rem] border-separate border-spacing-0 text-sm">
                 <thead className="sticky top-0 z-10">
-                  <tr className="text-left text-muted-foreground">
-                    <th className="border-b bg-muted px-4 py-3 font-medium">Company</th>
-                    <th className="border-b bg-muted px-4 py-3 font-medium">Contact</th>
-                    <th className="border-b bg-muted px-4 py-3 font-medium">Email</th>
-                    <th className="border-b bg-muted px-4 py-3 font-medium">Phone</th>
-                    <th className="border-b bg-muted px-4 py-3 font-medium">GSTIN</th>
-                    <th className="border-b bg-muted px-4 py-3 font-medium">Status</th>
-                    <th className="border-b bg-muted px-4 py-3 text-right font-medium">
+                  <tr className="text-center text-primary-foreground">
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Company</th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">
+                      Client legal name
+                    </th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Email</th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Phone</th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">GSTIN</th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Status</th>
+                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
@@ -363,11 +388,11 @@ export function BeneficiaryList({
                 <tbody>
                   {data.beneficiaries.map((beneficiary) => (
                     <tr key={beneficiary.id} className="hover:bg-muted/40">
-                      <td className="border-b px-4 py-3 font-medium">
+                      <td className="border-b px-4 py-3 text-center align-middle font-medium">
                         <button
                           type="button"
                           onClick={() => viewBeneficiary(beneficiary.id)}
-                          className="text-left underline-offset-4 hover:underline"
+                          className="underline-offset-4 hover:underline"
                         >
                           {beneficiary.legalName}
                         </button>
@@ -375,17 +400,17 @@ export function BeneficiaryList({
                           <p className="mt-1 text-xs font-normal text-muted-foreground">{beneficiary.city}</p>
                         ) : null}
                       </td>
-                      <td className="border-b px-4 py-3">{display(beneficiary.contactName)}</td>
-                      <td className="border-b px-4 py-3">{display(beneficiary.email)}</td>
-                      <td className="border-b px-4 py-3 whitespace-nowrap">{display(beneficiary.phone)}</td>
-                      <td className="border-b px-4 py-3 whitespace-nowrap">{display(beneficiary.gstin)}</td>
-                      <td className="border-b px-4 py-3">
+                      <td className="border-b px-4 py-3 text-center align-middle">{display(beneficiary.contactName)}</td>
+                      <td className="border-b px-4 py-3 text-center align-middle">{display(beneficiary.email)}</td>
+                      <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.phone)}</td>
+                      <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.gstin)}</td>
+                      <td className="border-b px-4 py-3 text-center align-middle">
                         <Badge variant={beneficiary.isActive ? "secondary" : "outline"}>
                           {beneficiary.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </td>
-                      <td className="border-b px-4 py-3">
-                        <div className="flex justify-end gap-1">
+                      <td className="border-b px-4 py-3 text-center align-middle">
+                        <div className="flex justify-center gap-1">
                           <IconAction label="View" onClick={() => viewBeneficiary(beneficiary.id)}>
                             <Eye />
                           </IconAction>
@@ -449,7 +474,7 @@ export function BeneficiaryList({
                   </p>
                 ) : null}
                 <dl className="grid gap-3 sm:grid-cols-2">
-                  <DetailItem label="Contact person">{display(viewing.contactName)}</DetailItem>
+                  <DetailItem label="Client legal name">{display(viewing.contactName)}</DetailItem>
                   <DetailItem label="Email">{display(viewing.email)}</DetailItem>
                   <DetailItem label="Phone">{display(viewing.phone)}</DetailItem>
                   <DetailItem label="GSTIN">{display(viewing.gstin)}</DetailItem>

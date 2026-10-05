@@ -7,6 +7,7 @@ import { InvoiceNotice } from "@/components/portal/invoice-notice";
 import { InvoicePayments } from "@/components/portal/invoice-payments";
 import { InvoicePdfActions } from "@/components/portal/invoice-pdf-actions";
 import { InvoicePreview } from "@/components/portal/invoice-preview";
+import { EditDraftButton } from "@/components/portal/modal-triggers";
 import { Button } from "@/components/ui/button";
 import {
   formatInvoiceDate,
@@ -18,7 +19,7 @@ import {
   type InvoiceStatus,
 } from "@/lib/invoice";
 import { paymentBalance, paymentModeLabel, type PaymentRecord } from "@/lib/payment";
-import { Check, ChevronLeft, Landmark, Pencil } from "lucide-react";
+import { Check, ChevronLeft, Landmark } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -78,14 +79,7 @@ export function InvoiceDetailView({
                 currency={invoice.currency}
               />
             ) : null}
-            {invoice.status === "draft" ? (
-              <Button asChild variant="outline">
-                <Link href={`/invoices/${invoice.id}/edit`}>
-                  <Pencil />
-                  Edit draft
-                </Link>
-              </Button>
-            ) : null}
+            {invoice.status === "draft" ? <EditDraftButton id={invoice.id} /> : null}
             {invoice.status === "draft" ? (
               <IssueInvoiceButton
                 id={invoice.id}

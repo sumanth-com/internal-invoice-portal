@@ -15,6 +15,7 @@ import {
   loadBeneficiary,
   mapBeneficiary,
 } from "@/lib/beneficiaries";
+import { recordBeneficiaryNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -51,7 +52,9 @@ export async function createBeneficiary(
     );
   }
 
-  return { error: null, fieldErrors: {}, saved: mapBeneficiary(data) };
+  const saved = mapBeneficiary(data);
+  await recordBeneficiaryNotification(saved.id, saved.legalName, true);
+  return { error: null, fieldErrors: {}, saved };
 }
 
 export async function updateBeneficiary(
@@ -90,7 +93,9 @@ export async function updateBeneficiary(
     return denied("This beneficiary was not found, or you do not have permission to edit it.");
   }
 
-  return { error: null, fieldErrors: {}, saved: mapBeneficiary(data[0]) };
+  const saved = mapBeneficiary(data[0]);
+  await recordBeneficiaryNotification(saved.id, saved.legalName, false);
+  return { error: null, fieldErrors: {}, saved };
 }
 
 export async function deleteBeneficiary(

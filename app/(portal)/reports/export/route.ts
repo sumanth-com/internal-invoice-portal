@@ -3,6 +3,7 @@ import { getPortalUser } from "@/lib/portal-user";
 import { loadReport } from "@/lib/reports-data";
 import { reportExcelName, reportWorkbook } from "@/lib/reports-excel";
 import {
+  beneficiaryIdFromParam,
   buildReport,
   filterReportInvoices,
   reportTypeFromParam,
@@ -74,14 +75,17 @@ export async function GET(request: Request) {
 
     const type: ReportType = reportTypeFromParam(url.searchParams.get("type") ?? undefined);
     const query = url.searchParams.get("q")?.trim() ?? "";
-    const invoices = filterReportInvoices(loaded.invoices, { type, query });
+    const beneficiaryId = beneficiaryIdFromParam(url.searchParams.get("beneficiary") ?? undefined);
+    const beneficiary =
+      loaded.invoices.find((invoice) => invoice.beneficiaryId === beneficiaryId)?.beneficiaryName ?? "";
+    const invoices = filterReportInvoices(loaded.invoices, { type, query, beneficiaryId });
     const view = buildReport(invoices, {
       range: loaded.view.range,
       from: loaded.view.from,
       to: loaded.view.to,
       activeBeneficiaries: loaded.view.beneficiaries.active,
     });
-    const payload = { type, view, invoices, query, generatedAt: generatedAt() };
+    const payload = { type, view, invoices, query, beneficiary, generatedAt: generatedAt() };
 
     if (invoices.length > 0) await recordExports(invoices, view.from, view.to, format);
 

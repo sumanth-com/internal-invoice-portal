@@ -99,6 +99,7 @@ function ReportDocument({
   view,
   invoices,
   query,
+  beneficiary,
   generatedAt,
   logo,
 }: {
@@ -106,6 +107,7 @@ function ReportDocument({
   view: ReportView;
   invoices: ReportInvoice[];
   query: string;
+  beneficiary: string;
   generatedAt: string;
   logo: Buffer | null;
 }) {
@@ -146,6 +148,7 @@ function ReportDocument({
             <Text style={styles.meta}>To {formatInvoiceDate(view.to)}</Text>
             <Text style={styles.meta}>Generated {generatedAt}</Text>
             {query ? <Text style={styles.meta}>Search: {query}</Text> : null}
+            {beneficiary ? <Text style={styles.meta}>Beneficiary: {beneficiary}</Text> : null}
           </View>
         </View>
         <View style={styles.summary}>
@@ -238,6 +241,7 @@ export async function renderReportPdf(input: {
   view: ReportView;
   invoices: ReportInvoice[];
   query: string;
+  beneficiary: string;
   generatedAt: string;
 }) {
   let logo: Buffer | null = null;

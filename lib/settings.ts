@@ -1,7 +1,7 @@
 import { financialYearLabel, formatInvoiceTimestamp, invoiceToday } from "@/lib/invoice";
 
 export const COMPANY_COLUMNS =
-  "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, website, gstin, pan, logo_url, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate, updated_at";
+  "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, website, gstin, pan, cin, logo_url, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate, updated_at";
 
 export const BANK_COLUMNS =
   "id, account_holder_name, bank_name, account_number, ifsc_code, swift_code, branch, is_default, is_active";
@@ -20,6 +20,7 @@ export type CompanyDetails = {
   website: string;
   gstin: string;
   pan: string;
+  cin: string;
   defaultCurrency: string;
   defaultPaymentTerms: string;
   invoiceNotes: string;
@@ -49,6 +50,7 @@ export type CompanyField = Exclude<
     website: string;
     gstin: string;
     pan: string;
+    cin: string;
     default_currency: string;
     default_payment_terms: string;
     invoice_notes: string;
@@ -67,6 +69,7 @@ export type CompanyWrite = {
   email: string | null;
   phone: string | null;
   website: string | null;
+  trade_name: string | null;
 };
 
 export type CompanyFormState = {
@@ -80,11 +83,12 @@ export type GstDefaults = {
   defaultGstRate: number;
   gstin: string;
   pan: string;
+  cin: string;
 };
 
 export type GstFormState = {
   error: string | null;
-  fieldErrors: Partial<Record<"default_gst_rate" | "gstin" | "pan", string>>;
+  fieldErrors: Partial<Record<"default_gst_rate" | "gstin" | "pan" | "cin", string>>;
   saved?: GstDefaults;
 };
 
@@ -177,6 +181,7 @@ export type CompanyRow = {
   website: string | null;
   gstin: string | null;
   pan: string | null;
+  cin: string | null;
   logo_url: string | null;
   default_currency: string;
   default_payment_terms: string | null;
@@ -200,6 +205,7 @@ export type BankRow = {
 
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const CIN_PATTERN = /^[A-Z][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
 const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const SWIFT_PATTERN = /^[A-Z0-9]{8}([A-Z0-9]{3})?$/;
 const PERIOD_PATTERN = /^[0-9]{4}(0[1-9]|1[0-2])$/;
@@ -232,6 +238,7 @@ export function emptyCompanyProfile(): CompanyProfile {
     website: "",
     gstin: "",
     pan: "",
+    cin: "",
     defaultCurrency: "INR",
     defaultPaymentTerms: "",
     invoiceNotes: "",
@@ -324,6 +331,7 @@ export function mapCompanyDetails(row: CompanyRow): CompanyDetails {
     website: row.website?.trim() ?? "",
     gstin: row.gstin?.trim() ?? "",
     pan: row.pan?.trim() ?? "",
+    cin: row.cin?.trim() ?? "",
     defaultCurrency: row.default_currency?.trim() || "INR",
     defaultPaymentTerms: row.default_payment_terms?.trim() ?? "",
     invoiceNotes: row.invoice_notes?.trim() ?? "",
@@ -419,6 +427,7 @@ export function parseCompanyForm(
 ): { ok: true; value: CompanyWrite } | { ok: false; fieldErrors: CompanyFormState["fieldErrors"] } {
   const errors: CompanyFormState["fieldErrors"] = {};
   const legalName = fieldText(formData, "legal_name");
+  const tradeName = fieldText(formData, "trade_name");
   const addressLine1 = fieldText(formData, "address_line1");
   const addressLine2 = fieldText(formData, "address_line2");
   const city = fieldText(formData, "city");
@@ -429,10 +438,11 @@ export function parseCompanyForm(
   const phone = fieldText(formData, "phone");
   const website = fieldText(formData, "website");
 
-  if (!legalName) errors.legal_name = "Enter the company name.";
-  else if (!limit(legalName, 200, "legal_name", "Company name", errors)) {
+  if (!legalName) errors.legal_name = "Enter the legal name.";
+  else if (!limit(legalName, 200, "legal_name", "Legal name", errors)) {
     /* recorded */
   }
+  limit(tradeName, 200, "trade_name", "Company name", errors);
   limit(addressLine1, 200, "address_line1", "Address line 1", errors);
   limit(addressLine2, 200, "address_line2", "Address line 2", errors);
   limit(city, 80, "city", "City", errors);
@@ -468,6 +478,7 @@ export function parseCompanyForm(
     ok: true,
     value: {
       legal_name: legalName,
+      trade_name: blankToNull(tradeName),
       address_line1: blankToNull(addressLine1),
       address_line2: blankToNull(addressLine2),
       city: blankToNull(city),
@@ -485,7 +496,7 @@ export function parseGstForm(
   formData: FormData,
 ): {
   ok: true;
-  value: { default_gst_enabled: boolean; default_gst_rate: number; gstin: string | null; pan: string | null };
+  value: { default_gst_enabled: boolean; default_gst_rate: number; gstin: string | null; pan: string | null; cin: string | null };
 } | {
   ok: false;
   fieldErrors: GstFormState["fieldErrors"];
@@ -495,6 +506,7 @@ export function parseGstForm(
   const rateText = fieldText(formData, "default_gst_rate");
   const gstin = fieldText(formData, "gstin").toUpperCase();
   const pan = fieldText(formData, "pan").toUpperCase();
+  const cin = fieldText(formData, "cin").toUpperCase();
   if (!RATE_PATTERN.test(rateText)) {
     errors.default_gst_rate = "Enter a GST rate from 0 to 100, with up to 2 decimal places.";
   } else {
@@ -507,6 +519,9 @@ export function parseGstForm(
   if (pan && !PAN_PATTERN.test(pan)) {
     errors.pan = "Enter a valid 10-character PAN, or leave it blank.";
   }
+  if (cin && !CIN_PATTERN.test(cin)) {
+    errors.cin = "Enter a valid 21-character CIN, or leave it blank.";
+  }
   if (Object.keys(errors).length > 0) return { ok: false, fieldErrors: errors };
   return {
     ok: true,
@@ -515,6 +530,7 @@ export function parseGstForm(
       default_gst_rate: Number(rateText),
       gstin: blankToNull(gstin),
       pan: blankToNull(pan),
+      cin: blankToNull(cin),
     },
   };
 }

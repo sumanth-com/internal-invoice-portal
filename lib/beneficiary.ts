@@ -74,6 +74,8 @@ export type BeneficiaryListData = {
   inactive: number;
   search: string;
   status: BeneficiaryStatusFilter;
+  contact: string;
+  contactNames: string[];
   truncated: boolean;
 };
 
@@ -111,11 +113,21 @@ export function normalizeBeneficiaryStatus(
   return "all";
 }
 
-export function beneficiaryListHref(options: { search?: string; status?: BeneficiaryStatusFilter }) {
+export function normalizeBeneficiaryContact(value: string | undefined) {
+  return (value ?? "").trim().slice(0, 120);
+}
+
+export function beneficiaryListHref(options: {
+  search?: string;
+  status?: BeneficiaryStatusFilter;
+  contact?: string;
+}) {
   const params = new URLSearchParams();
   const search = options.search?.trim();
+  const contact = normalizeBeneficiaryContact(options.contact);
   if (search) params.set("q", search);
   if (options.status && options.status !== "all") params.set("status", options.status);
+  if (contact) params.set("contact", contact);
   const query = params.toString();
   return query ? `/beneficiaries?${query}` : "/beneficiaries";
 }
@@ -165,7 +177,7 @@ export function parseBeneficiaryForm(
     fieldText(formData, "contact_name"),
     120,
     "contact_name",
-    "Contact person name",
+    "Client legal name",
     errors,
   );
 

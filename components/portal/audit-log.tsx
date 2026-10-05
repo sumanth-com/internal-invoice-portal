@@ -452,36 +452,36 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full min-w-[56rem] border-separate border-spacing-0 text-sm">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-card text-left text-muted-foreground">
-                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Date & time</th>
-                    <th className="border-b bg-card px-4 py-3 font-medium">User</th>
-                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Action</th>
-                    <th className="border-b bg-card px-4 py-3 font-medium whitespace-nowrap">Invoice</th>
-                    <th className="border-b bg-card px-4 py-3 font-medium">Details</th>
-                    <th className="border-b bg-card px-4 py-3 font-medium">
+                  <tr className="text-center text-primary-foreground">
+                    <th className="w-[18%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Date & time</th>
+                    <th className="w-[18%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">User</th>
+                    <th className="w-[16%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Action</th>
+                    <th className="w-[16%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Invoice</th>
+                    <th className="border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Details</th>
+                    <th className="w-16 border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">
                       <span className="sr-only">View</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.entries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td className="border-b px-4 py-3 whitespace-nowrap text-muted-foreground">
+                    <tr key={entry.id} className="hover:bg-muted/40">
+                      <td className="border-b px-3 py-3 text-center align-middle text-muted-foreground">
                         {formatAuditTimestamp(entry.createdAt)}
                       </td>
-                      <td className="border-b px-4 py-3 align-top">
+                      <td className="border-b px-3 py-3 text-center align-middle">
                         <p className="font-medium">{entry.actorName}</p>
                         {entry.actorEmail && entry.actorEmail !== entry.actorName ? (
                           <p className="mt-1 break-all text-xs text-muted-foreground">{entry.actorEmail}</p>
                         ) : null}
                       </td>
-                      <td className="border-b px-4 py-3 whitespace-nowrap">
+                      <td className="border-b px-3 py-3 text-center align-middle">
                         <ActionBadge action={entry.action} />
                       </td>
-                      <td className="border-b px-4 py-3 font-medium whitespace-nowrap">
+                      <td className="border-b px-3 py-3 text-center align-middle font-medium">
                         <Link
                           href={`/invoices/${entry.invoiceId}`}
                           className="underline-offset-4 hover:underline"
@@ -489,10 +489,10 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
                           {entry.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="max-w-xs border-b px-4 py-3 break-words text-muted-foreground">
+                      <td className="border-b px-3 py-3 break-words text-center align-middle text-muted-foreground">
                         {entry.summary}
                       </td>
-                      <td className="border-b px-4 py-3 text-right whitespace-nowrap">
+                      <td className="border-b px-3 py-3 text-center align-middle">
                         <IconAction label="View" onClick={() => setSelected(entry)}>
                           <Eye />
                         </IconAction>

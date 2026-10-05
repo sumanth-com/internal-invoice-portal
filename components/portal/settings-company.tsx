@@ -1,13 +1,12 @@
 "use client";
 
 import { saveCompanySettings } from "@/app/(portal)/settings/actions";
+import { useActionToast } from "@/components/portal/toasts";
+import { usePortalModals } from "@/components/portal/portal-modals";
 import {
   fieldProps,
   SettingsField,
-  SettingsNotice,
-  SettingsSaved,
   SettingsSection,
-  useTimedFlag,
 } from "@/components/portal/settings-fields";
 import { ChoiceSelect, SuggestField } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,8 @@ import { startTransition, useActionState, useEffect, useRef, useState } from "re
 
 function ReadOnlyDetails({ company }: { company: CompanyProfile }) {
   const rows: { label: string; value: string }[] = [
-    { label: "Company name", value: company.legalName },
+    { label: "Company name", value: company.tradeName || company.legalName },
+    { label: "Legal name", value: company.legalName },
     { label: "Website", value: company.website },
     { label: "Address line 1", value: company.addressLine1 },
     { label: "Address line 2", value: company.addressLine2 },
@@ -79,13 +79,15 @@ export function CompanySettingsSection({
   const nameRef = useRef<HTMLInputElement>(null);
   const [state, formAction, pending] = useActionState(saveCompanySettings, emptyCompanyFormState);
   const handled = useRef<typeof state | null>(null);
+  const { notify } = usePortalModals();
   const errors = state.fieldErrors;
   const updated = companyUpdatedLabel(canEdit ? values.updatedAt : company.updatedAt);
-  const savedVisible = useTimedFlag(state.saved && !state.error ? state : null);
+  useActionToast(state, state.error, "error");
 
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
+    notify("Company details saved.");
     setValues((current) => ({ ...current, ...state.saved, exists: true }));
     const nextPhone = splitStoredPhone(state.saved.phone, state.saved.country);
     setDial(nextPhone.dial);
@@ -93,7 +95,7 @@ export function CompanySettingsSection({
     setEditing(false);
     onSaved(state.saved);
     invalidateInvoiceFormOptions();
-  }, [state, onSaved]);
+  }, [notify, state, onSaved]);
 
   function setField<Key extends keyof CompanyProfile>(key: Key, value: CompanyProfile[Key]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -132,7 +134,6 @@ export function CompanySettingsSection({
         </div>
       }
     >
-      <SettingsSaved show={savedVisible}>Company details saved.</SettingsSaved>
       {canEdit ? (
         <form
           id="company-settings"
@@ -144,7 +145,6 @@ export function CompanySettingsSection({
             startTransition(() => formAction(formData));
           }}
         >
-          {state.error ? <SettingsNotice tone="error">{state.error}</SettingsNotice> : null}
           <input type="hidden" name="phone" value={composePhone(dial, national)} />
           <fieldset
             inert={!editing || pending ? true : undefined}
@@ -153,9 +153,18 @@ export function CompanySettingsSection({
               !editing && "cursor-default [&_button]:cursor-default [&_input]:cursor-default",
             )}
           >
-            <SettingsField id="legal_name" label="Company name" required error={errors.legal_name}>
+            <SettingsField id="trade_name" label="Company name" error={errors.trade_name}>
               <Input
                 ref={nameRef}
+                {...fieldProps("trade_name", errors.trade_name)}
+                value={values.tradeName}
+                onChange={(event) => setField("tradeName", event.target.value)}
+                maxLength={200}
+                autoComplete="organization"
+              />
+            </SettingsField>
+            <SettingsField id="legal_name" label="Legal name" required error={errors.legal_name}>
+              <Input
                 {...fieldProps("legal_name", errors.legal_name)}
                 value={values.legalName}
                 onChange={(event) => setField("legalName", event.target.value)}

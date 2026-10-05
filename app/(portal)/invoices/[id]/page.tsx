@@ -1,4 +1,5 @@
 import { InvoiceDetailView, InvoiceMissing } from "@/components/portal/invoice-detail";
+import { AutoOpenEditInvoice } from "@/components/portal/modal-triggers";
 import { invoiceNotice } from "@/lib/invoice";
 import { loadInvoice } from "@/lib/invoices";
 import { loadInvoicePayments } from "@/lib/payments";
@@ -19,11 +20,12 @@ async function InvoiceContent({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ notice?: string | string[] }>;
+  searchParams: Promise<{ notice?: string | string[]; edit?: string | string[] }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   const noticeValue = Array.isArray(query.notice) ? query.notice[0] : query.notice;
+  const editValue = Array.isArray(query.edit) ? query.edit[0] : query.edit;
 
   try {
     const [invoice, user, payments] = await Promise.all([
@@ -33,12 +35,17 @@ async function InvoiceContent({
     ]);
     if (!invoice || !user) return <InvoiceMissing />;
     return (
-      <InvoiceDetailView
-        invoice={invoice}
-        payments={payments}
-        isAdmin={user.role === "admin"}
-        notice={invoiceNotice(noticeValue)}
-      />
+      <>
+        {editValue === "1" && invoice.status === "draft" ? (
+          <AutoOpenEditInvoice id={invoice.id} />
+        ) : null}
+        <InvoiceDetailView
+          invoice={invoice}
+          payments={payments}
+          isAdmin={user.role === "admin"}
+          notice={invoiceNotice(noticeValue)}
+        />
+      </>
     );
   } catch (error) {
     const message =
@@ -59,7 +66,7 @@ export default function InvoicePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ notice?: string | string[] }>;
+  searchParams: Promise<{ notice?: string | string[]; edit?: string | string[] }>;
 }) {
   return (
     <Suspense fallback={<InvoiceFallback />}>

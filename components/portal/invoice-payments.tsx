@@ -3,6 +3,7 @@
 import { RecordPaymentDialog } from "@/components/portal/record-payment-dialog";
 import { usePortalModals } from "@/components/portal/portal-modals";
 import { formatInvoiceDate, formatMoney, roundMoney } from "@/lib/invoice";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import { paymentBalance, paymentModeLabel, type PaymentRecord, type RecordedPayment } from "@/lib/payment";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
@@ -60,6 +61,7 @@ export function InvoicePayments({
         ? "Payment recorded. The invoice is now paid."
         : "Payment recorded.",
     );
+    if (saved.invoiceStatus === "paid") requestNotificationRefresh();
     startTransition(() => router.refresh());
   }
 

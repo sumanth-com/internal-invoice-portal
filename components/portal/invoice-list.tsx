@@ -20,11 +20,10 @@ import {
   paymentStandingAfterStatusChange,
   statusLabel,
   type InvoiceListData,
-  type InvoicePaymentFilter,
-  type InvoiceSort,
   type InvoiceStatus,
   type InvoiceSummary,
 } from "@/lib/invoice";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, Eye, Pencil, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -34,25 +33,7 @@ import { startTransition, useCallback, useEffect, useState, type ReactNode } fro
 const fieldClass =
   "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
 
-const sortOptions: { value: InvoiceSort; label: string }[] = [
-  { value: "date_desc", label: "Newest date" },
-  { value: "date_asc", label: "Oldest date" },
-  { value: "number_asc", label: "Invoice number" },
-  { value: "number_desc", label: "Invoice number, descending" },
-  { value: "beneficiary_asc", label: "Beneficiary" },
-  { value: "total_desc", label: "Highest total" },
-  { value: "total_asc", label: "Lowest total" },
-  { value: "status_asc", label: "Status" },
-];
-
 const statuses: InvoiceStatus[] = ["draft", "issued", "paid", "cancelled"];
-
-const paymentFilters: { value: InvoicePaymentFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "unpaid", label: "Pending" },
-  { value: "partial", label: "Partially Paid" },
-  { value: "paid", label: "Paid" },
-];
 
 const invoiceColumns =
   "grid grid-cols-[minmax(11rem,1.3fr)_minmax(8.5rem,0.9fr)_minmax(11rem,1.3fr)_8.5rem_8rem_7.5rem_9.5rem_8.5rem_8rem] items-center";
@@ -117,51 +98,43 @@ export function InvoiceList({
   const router = useRouter();
   const [source, setSource] = useState(data);
   const [search, setSearch] = useState(data.search);
-  const [status, setStatus] = useState<InvoiceStatus | "all">(data.status);
-  const [payment, setPayment] = useState<InvoicePaymentFilter>(data.payment);
+  const [beneficiary, setBeneficiary] = useState(data.beneficiary);
   const [from, setFrom] = useState(data.from);
   const [to, setTo] = useState(data.to);
-  const [sort, setSort] = useState<InvoiceSort>(data.sort);
   const [rows, setRows] = useState(data.invoices);
   const [deleting, setDeleting] = useState<InvoiceSummary | null>(null);
   const [confirming, setConfirming] = useState<{ invoice: InvoiceSummary; next: InvoiceStatus } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const { notify } = usePortalModals();
+  const { notify, openEditInvoice } = usePortalModals();
 
   if (source !== data) {
     setSource(data);
     setSearch(data.search);
-    setStatus(data.status);
-    setPayment(data.payment);
+    setBeneficiary(data.beneficiary);
     setFrom(data.from);
     setTo(data.to);
-    setSort(data.sort);
     setRows(data.invoices);
   }
 
   const filtering =
-    data.search.length > 0 || data.status !== "all" || data.payment !== "all" || Boolean(data.from || data.to);
+    data.search.length > 0 || Boolean(data.beneficiary) || Boolean(data.from || data.to);
 
   const pushFilters = useCallback(
     (next?: {
       search?: string;
-      status?: InvoiceStatus | "all";
-      payment?: InvoicePaymentFilter;
+      beneficiary?: string;
       from?: string;
       to?: string;
-      sort?: InvoiceSort;
     }) => {
       const href = invoiceListHref({
         search: next?.search ?? search,
-        status: next?.status ?? status,
-        payment: next?.payment ?? payment,
+        beneficiary: next?.beneficiary ?? beneficiary,
         from: next?.from ?? from,
         to: next?.to ?? to,
-        sort: next?.sort ?? sort,
       });
       startTransition(() => router.push(href));
     },
-    [search, status, payment, from, to, sort, router],
+    [search, beneficiary, from, to, router],
   );
 
   useEffect(() => {
@@ -194,6 +167,9 @@ export function InvoiceList({
         }),
       );
       notify(statusNotice(result.status));
+      if (result.status === "issued" || result.status === "paid" || result.status === "cancelled") {
+        requestNotificationRefresh();
+      }
     },
     [data.payment, data.status, notify],
   );
@@ -209,11 +185,7 @@ export function InvoiceList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      {notice ? (
-        <div className="shrink-0">
-          <InvoiceNotice notice={notice} />
-        </div>
-      ) : null}
+      {notice ? <InvoiceNotice notice={notice} /> : null}
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex shrink-0 flex-col gap-3 border-b p-4">
@@ -222,7 +194,7 @@ export function InvoiceList({
             <p className="mt-1 text-sm text-muted-foreground">{listDescription(data, filtering)}</p>
           </div>
           <form
-            className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(14rem,1.4fr)_10.5rem_11.5rem_9.75rem_9.75rem_minmax(11rem,13rem)]"
+            className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1.6fr)_minmax(12rem,1fr)_9.75rem_9.75rem]"
             onSubmit={(event) => {
               event.preventDefault();
               pushFilters({ search: search.trim() });
@@ -233,41 +205,25 @@ export function InvoiceList({
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Invoice number or beneficiary"
-                aria-label="Search invoices"
+                placeholder="Invoice number"
+                aria-label="Search by invoice number"
                 className="h-9 w-full py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
               />
             </div>
             <FilterSelect
-              label="Status"
-              value={status}
+              label="Beneficiary"
+              value={beneficiary}
               onChange={(value) => {
-                const next = value === "all" || statuses.includes(value as InvoiceStatus) ? (value as InvoiceStatus | "all") : "all";
-                setStatus(next);
-                pushFilters({ status: next });
+                const next = data.beneficiaries.some((item) => item.id === value) ? value : "";
+                setBeneficiary(next);
+                pushFilters({ beneficiary: next });
               }}
               className="w-full"
             >
-              <option value="all">All statuses</option>
-              {statuses.map((item) => (
-                <option key={item} value={item}>
-                  {statusLabel(item)}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              label="Payment status"
-              value={payment}
-              onChange={(value) => {
-                const next = paymentFilters.find((option) => option.value === value)?.value ?? "all";
-                setPayment(next);
-                pushFilters({ payment: next });
-              }}
-              className="w-full"
-            >
-              {paymentFilters.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="">Beneficiary</option>
+              {data.beneficiaries.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
                 </option>
               ))}
             </FilterSelect>
@@ -293,22 +249,6 @@ export function InvoiceList({
               }}
               className="h-9 w-full min-w-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
-            <FilterSelect
-              label="Sort invoices"
-              value={sort}
-              onChange={(value) => {
-                const next = sortOptions.find((option) => option.value === value)?.value ?? "date_desc";
-                setSort(next);
-                pushFilters({ sort: next });
-              }}
-              className="w-full"
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </FilterSelect>
           </form>
         </div>
 
@@ -334,7 +274,7 @@ export function InvoiceList({
                   <p className="text-sm font-medium">No invoices found</p>
                   <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                     {filtering
-                      ? "Nothing matches these filters. Adjust the status, payment status, or dates."
+                      ? "Nothing matches this invoice number, beneficiary, or date range."
                       : "Invoices you create will appear in this list."}
                   </p>
                 </div>
@@ -377,7 +317,11 @@ export function InvoiceList({
                           <Eye />
                         </IconAction>
                         {invoice.status === "draft" ? (
-                          <IconAction label="Edit" href={`/invoices/${invoice.id}/edit`} tipAlign="end">
+                          <IconAction
+                            label="Edit"
+                            onClick={() => openEditInvoice(invoice.id)}
+                            tipAlign="end"
+                          >
                             <Pencil />
                           </IconAction>
                         ) : null}

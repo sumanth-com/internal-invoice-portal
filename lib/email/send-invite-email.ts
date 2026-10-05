@@ -3,7 +3,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { INVITE_EMAIL_LOGO_CID, renderInviteEmail } from "@/lib/email/invite-template";
-import { createResendClient, resendFromAddress } from "@/lib/email/resend";
+import { createResendClient, resendFromAddress, resendSendError } from "@/lib/email/resend";
 import type { AppRole } from "@/lib/portal";
 
 const EMAIL_LOGO_PATH = path.join(process.cwd(), "assets", "Logo.png");
@@ -17,7 +17,12 @@ export async function sendInviteEmail(input: {
   const resend = createResendClient();
   const from = resendFromAddress();
   if (!resend || !from) {
-    return { ok: false, error: "Email sending is not configured." };
+    return {
+      ok: false,
+      error: from
+        ? "Email sending is not configured."
+        : "The sender address is not configured. Use a verified sender such as iFranchise Invoices <sumanth.reddy@ifranchise.in>.",
+    };
   }
 
   const content = renderInviteEmail({
@@ -43,8 +48,11 @@ export async function sendInviteEmail(input: {
   });
 
   if (sent.error || !sent.data?.id) {
-    console.error("Invitation email failed", sent.error?.name);
-    return { ok: false, error: "The invitation email could not be sent." };
+    console.error("Invitation email failed", sent.error?.name, sent.error?.message);
+    return {
+      ok: false,
+      error: resendSendError(sent.error?.message, "The invitation email could not be sent."),
+    };
   }
 
   return { ok: true };

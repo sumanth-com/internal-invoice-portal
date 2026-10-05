@@ -3,15 +3,17 @@
 import { fetchBeneficiary } from "@/app/(portal)/beneficiaries/actions";
 import { emailInvoice } from "@/app/(portal)/invoices/email-action";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
+import { useActionToast } from "@/components/portal/toasts";
 import { usePortalModals } from "@/components/portal/portal-modals";
 import { Button } from "@/components/ui/button";
 import type { Beneficiary } from "@/lib/beneficiary";
 import type { EmailInvoiceState } from "@/lib/email/invoice-email-state";
 import { formatMoney } from "@/lib/invoice";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useEffect, useState, useTransition } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from "react";
 
 const initialEmailInvoiceState: EmailInvoiceState = {
   error: null,
@@ -50,15 +52,19 @@ function EmailInvoiceForm({
   onEditBeneficiary: (beneficiary: Beneficiary) => void;
 }) {
   const modal = useModal();
+  const { notify } = usePortalModals();
   const [state, formAction, pending] = useActionState(
     emailInvoice,
     initialEmailInvoiceState,
   );
   const current = state?.fieldErrors ? state : initialEmailInvoiceState;
+  const sentToast = useRef(false);
   const [sent, setSent] = useState(false);
   const recipient = beneficiaryEmail?.trim() || "";
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  useActionToast(current, current.error, "error");
+  useActionToast(editError, editError, "error");
   const { setBusy, setDirty } = modal;
 
   useEffect(() => {
@@ -70,8 +76,12 @@ function EmailInvoiceForm({
   }, [setDirty]);
 
   useEffect(() => {
-    if (current.sent) setSent(true);
-  }, [current.sent]);
+    if (!current.sent || sentToast.current) return;
+    sentToast.current = true;
+    setSent(true);
+    notify(`Invoice sent to ${recipient}.`);
+    requestNotificationRefresh();
+  }, [current.sent, notify, recipient]);
 
   if (sent) {
     return (
@@ -108,14 +118,6 @@ function EmailInvoiceForm({
     >
       <ModalBody>
         <div className="mx-auto w-full max-w-lg px-4 py-6 sm:px-6">
-          {current.error ? (
-            <p
-              role="alert"
-              className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            >
-              {current.error}
-            </p>
-          ) : null}
           {!recipient ? (
             <div className="mb-4 rounded-lg border bg-card px-4 py-3 text-sm">
               <p className="text-muted-foreground">
@@ -210,7 +212,7 @@ export function InvoiceEmailButton({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            className="size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800"
             aria-label="Email invoice"
             onClick={() => setOpen(true)}
           >

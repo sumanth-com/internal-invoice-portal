@@ -24,6 +24,7 @@ async function InvoicesContent({ searchParams }: { searchParams: SearchParams })
     const [data, user] = await Promise.all([
       loadInvoices({
         q: read("q"),
+        beneficiary: read("beneficiary"),
         status: read("status"),
         payment: read("payment"),
         from: read("from"),
