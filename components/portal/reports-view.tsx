@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/portal/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatInvoiceDate, formatMoney, roundMoney, statusLabel, type InvoiceStatus } from "@/lib/invoice";
+import { dateOnOrAfter, formatInvoiceDate, formatMoney, roundMoney, statusLabel, type InvoiceStatus } from "@/lib/invoice";
 import { paymentModeLabel } from "@/lib/payment";
 import {
   REPORT_TYPE_LABELS,
@@ -223,19 +223,22 @@ export function ReportsView({
               aria-label="From date"
               onChange={(event) => {
                 const value = event.target.value;
+                const nextTo = dateOnOrAfter(value, to);
                 setFrom(value);
-                if (value && to) pushFilters({ from: value, to });
+                setTo(nextTo);
+                if (value && nextTo) pushFilters({ from: value, to: nextTo });
               }}
               className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
             <Input
               type="date"
               value={to}
+              min={from || undefined}
               aria-label="To date"
               onChange={(event) => {
-                const value = event.target.value;
-                setTo(value);
-                if (from && value) pushFilters({ from, to: value });
+                const nextTo = dateOnOrAfter(from, event.target.value);
+                setTo(nextTo);
+                if (from && nextTo) pushFilters({ from, to: nextTo });
               }}
               className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />

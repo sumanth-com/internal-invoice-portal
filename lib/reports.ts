@@ -1,4 +1,5 @@
 import {
+  dateOnOrAfter,
   formatInvoiceDate,
   formatMoney,
   isInvoiceStatus,
@@ -182,12 +183,9 @@ export function resolveReportRange(
   }
 
   const from = DATE_PATTERN.test(raw.from ?? "") ? (raw.from as string) : "";
-  const to = DATE_PATTERN.test(raw.to ?? "") ? (raw.to as string) : "";
+  const to = dateOnOrAfter(from, DATE_PATTERN.test(raw.to ?? "") ? (raw.to as string) : "");
   if (!from || !to) {
     return { range, from, to, error: "Choose a start and end date." };
-  }
-  if (from > to) {
-    return { range, from, to, error: "The start date must be on or before the end date." };
   }
   if (monthSpan(from, to) > MAX_MONTHS) {
     return { range, from, to, error: "Choose a range of 36 months or less." };

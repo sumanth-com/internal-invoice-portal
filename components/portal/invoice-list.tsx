@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
+  dateOnOrAfter,
   formatInvoiceDate,
   formatMoney,
   invoiceListHref,
@@ -233,19 +234,22 @@ export function InvoiceList({
               aria-label="From date"
               onChange={(event) => {
                 const value = event.target.value;
+                const nextTo = dateOnOrAfter(value, to);
                 setFrom(value);
-                pushFilters({ from: value });
+                setTo(nextTo);
+                pushFilters({ from: value, to: nextTo });
               }}
               className="h-9 w-full min-w-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
             <Input
               type="date"
               value={to}
+              min={from || undefined}
               aria-label="To date"
               onChange={(event) => {
-                const value = event.target.value;
-                setTo(value);
-                pushFilters({ to: value });
+                const nextTo = dateOnOrAfter(from, event.target.value);
+                setTo(nextTo);
+                pushFilters({ to: nextTo });
               }}
               className="h-9 w-full min-w-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />

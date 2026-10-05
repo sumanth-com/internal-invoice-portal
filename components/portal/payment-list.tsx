@@ -7,7 +7,7 @@ import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { usePortalModals } from "@/components/portal/portal-modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { datesAreCurrentMonth, formatInvoiceDate, formatMoney } from "@/lib/invoice";
+import { dateOnOrAfter, datesAreCurrentMonth, formatInvoiceDate, formatMoney } from "@/lib/invoice";
 import { requestNotificationRefresh } from "@/lib/notifications";
 import {
   PAYMENT_LIST_LIMIT,
@@ -231,18 +231,23 @@ export function PaymentList({
             value={from}
             aria-label="From date"
             onChange={(event) => {
-              setFrom(event.target.value);
-              pushFilters({ from: event.target.value });
+              const value = event.target.value;
+              const nextTo = dateOnOrAfter(value, to);
+              setFrom(value);
+              setTo(nextTo);
+              pushFilters({ from: value, to: nextTo });
             }}
             className="h-9 w-full bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0 sm:w-36"
           />
           <Input
             type="date"
             value={to}
+            min={from || undefined}
             aria-label="To date"
             onChange={(event) => {
-              setTo(event.target.value);
-              pushFilters({ to: event.target.value });
+              const nextTo = dateOnOrAfter(from, event.target.value);
+              setTo(nextTo);
+              pushFilters({ to: nextTo });
             }}
             className="h-9 w-full bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0 sm:w-36"
           />

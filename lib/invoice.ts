@@ -421,6 +421,11 @@ export function datesAreCurrentMonth(from: string, to: string, today = invoiceTo
   return from === month.from && to === month.to;
 }
 
+export function dateOnOrAfter(start: string, end: string) {
+  if (start && end && end < start) return start;
+  return end;
+}
+
 export function statusLabel(status: InvoiceStatus) {
   if (status === "draft") return "Draft";
   if (status === "issued") return "Issued";
