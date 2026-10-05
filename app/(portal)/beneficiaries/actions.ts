@@ -161,6 +161,41 @@ export async function deleteBeneficiary(
   redirect("/beneficiaries?notice=deleted");
 }
 
+export async function setBeneficiaryStatus(
+  id: string,
+  isActive: boolean,
+): Promise<{ ok: true; isActive: boolean } | { ok: false; error: string }> {
+  const user = await getPortalUser();
+  if (!user?.isActive) {
+    return { ok: false, error: "You do not have permission to edit this beneficiary." };
+  }
+  if (!isBeneficiaryId(id)) {
+    return { ok: false, error: "This beneficiary was not found." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("beneficiaries")
+    .update({ is_active: isActive })
+    .eq("id", id)
+    .select("id, legal_name, is_active");
+
+  if (error) {
+    return {
+      ok: false,
+      error: beneficiaryErrorMessage(error, "The beneficiary status could not be saved."),
+    };
+  }
+  if (!data?.length) {
+    return { ok: false, error: "This beneficiary was not found, or you do not have permission to edit it." };
+  }
+
+  const saved = data[0];
+  await recordBeneficiaryNotification(saved.id, saved.legal_name, false);
+  revalidatePath("/beneficiaries");
+  return { ok: true, isActive: saved.is_active };
+}
+
 export async function fetchBeneficiary(
   id: string,
 ): Promise<{ ok: true; beneficiary: Beneficiary } | { ok: false; error: string }> {

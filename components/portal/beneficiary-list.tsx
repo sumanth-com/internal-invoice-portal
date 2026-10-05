@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchBeneficiary } from "@/app/(portal)/beneficiaries/actions";
+import { fetchBeneficiary, setBeneficiaryStatus } from "@/app/(portal)/beneficiaries/actions";
 import { DeleteBeneficiaryDialog } from "@/components/portal/delete-beneficiary-button";
 import { IconAction } from "@/components/portal/icon-action";
 import { BeneficiaryNotice } from "@/components/portal/beneficiary-notice";
@@ -8,6 +8,12 @@ import { useBeneficiarySaved, usePortalModals } from "@/components/portal/portal
 import { Modal, ModalBody, ModalFooter } from "@/components/portal/modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   beneficiaryListHref,
@@ -18,8 +24,9 @@ import {
   type BeneficiaryStatusFilter,
   type BeneficiarySummary,
 } from "@/lib/beneficiary";
+import { requestNotificationRefresh } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
-import { ChevronDown, CircleCheck, CircleOff, Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, CircleOff, Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -163,6 +170,54 @@ function FilterSelect({
   );
 }
 
+function BeneficiaryStatusControl({
+  beneficiary,
+  busy,
+  onChange,
+}: {
+  beneficiary: BeneficiarySummary;
+  busy: boolean;
+  onChange: (isActive: boolean) => void;
+}) {
+  const options = [
+    { active: true, label: "Active" },
+    { active: false, label: "Inactive" },
+  ];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        disabled={busy}
+        aria-label={`Status for ${beneficiary.legalName}`}
+        className={cn(
+          "inline-flex h-7 w-[8.25rem] items-center justify-between gap-1 rounded-full px-2.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait",
+          beneficiary.isActive ? "bg-emerald-600 text-white" : "bg-slate-500 text-white",
+        )}
+      >
+        <span>{beneficiary.isActive ? "Active" : "Inactive"}</span>
+        <ChevronDown className="size-3 shrink-0 opacity-80" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[8.25rem] p-1">
+        {options.map((option) => {
+          const current = option.active === beneficiary.isActive;
+          return (
+            <DropdownMenuItem
+              key={option.label}
+              onSelect={() => onChange(option.active)}
+              className={cn(
+                "justify-between text-xs font-medium focus:bg-[hsl(262_83%_96%)] focus:text-[hsl(262_47%_28%)]",
+                current && "bg-[hsl(262_83%_58%)] text-white focus:bg-[hsl(262_83%_58%)] focus:text-white",
+              )}
+            >
+              {option.label}
+              {current ? <Check className="size-3.5" /> : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function DetailItem({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -195,6 +250,7 @@ export function BeneficiaryList({
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<Beneficiary | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const viewRequest = useRef(0);
   const deletable = new Set(deletableIds);
 
@@ -209,6 +265,25 @@ export function BeneficiaryList({
   useBeneficiarySaved((saved) => {
     setData((current) => applySaved(current, toSummary(saved)));
   });
+
+  const applyStatus = useCallback(
+    async (beneficiary: BeneficiarySummary, isActive: boolean) => {
+      if (beneficiary.isActive === isActive || busyId === beneficiary.id) return;
+      setBusyId(beneficiary.id);
+      const result = await setBeneficiaryStatus(beneficiary.id, isActive);
+      setBusyId(null);
+      if (!result.ok) {
+        notify(result.error, "error");
+        return;
+      }
+      const saved = { ...beneficiary, isActive: result.isActive };
+      setData((current) => applySaved(current, saved));
+      setViewing((current) => (current?.id === beneficiary.id ? { ...current, isActive: result.isActive } : current));
+      notify(result.isActive ? `${beneficiary.legalName} is active.` : `${beneficiary.legalName} is inactive.`);
+      requestNotificationRefresh();
+    },
+    [busyId, notify],
+  );
 
   const filtering = data.search.length > 0 || data.status !== "all" || data.contact.length > 0;
   const emptyPortal = data.total === 0 && !filtering;
@@ -405,9 +480,11 @@ export function BeneficiaryList({
                       <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.phone)}</td>
                       <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.gstin)}</td>
                       <td className="border-b px-4 py-3 text-center align-middle">
-                        <Badge variant={beneficiary.isActive ? "secondary" : "outline"}>
-                          {beneficiary.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        <BeneficiaryStatusControl
+                          beneficiary={beneficiary}
+                          busy={busyId === beneficiary.id}
+                          onChange={(isActive) => void applyStatus(beneficiary, isActive)}
+                        />
                       </td>
                       <td className="border-b px-4 py-3 text-center align-middle">
                         <div className="flex justify-center gap-1">
