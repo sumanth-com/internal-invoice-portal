@@ -8,12 +8,13 @@ import {
   type ReportInvoice,
   type ReportView,
 } from "@/lib/reports";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 1000;
 
 const INVOICE_COLUMNS = `
-  id, invoice_number, invoice_date, status, subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id,
+  id, invoice_number, invoice_date, status, subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id, bill_to,
   beneficiaries ( legal_name ),
   invoice_payments ( amount, payment_date, payment_mode )
 `;
@@ -35,6 +36,7 @@ type InvoiceRow = {
   balance_due: number | string;
   currency: string | null;
   beneficiary_id: string;
+  bill_to: string | null;
   beneficiaries: Embedded<{ legal_name: string }>;
   invoice_payments: Embedded<{
     amount: number | string;
@@ -72,7 +74,10 @@ function mapInvoice(row: InvoiceRow): ReportInvoice | null {
     number: row.invoice_number,
     date: row.invoice_date,
     beneficiaryId: row.beneficiary_id,
-    beneficiaryName: beneficiary?.legal_name?.trim() || "—",
+    beneficiaryName:
+      beneficiary?.legal_name?.trim() ||
+      row.bill_to?.split(/\r?\n/).map((part) => part.trim()).find((part) => part.length > 0) ||
+      "—",
     status: row.status,
     subtotal: money(row.subtotal),
     cgstAmount: money(row.cgst_amount),
@@ -91,6 +96,7 @@ function mapInvoice(row: InvoiceRow): ReportInvoice | null {
 
 async function invoicesInRange(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   from: string,
   to: string,
 ) {
@@ -100,6 +106,7 @@ async function invoicesInRange(
     const { data, error } = await supabase
       .from("invoices")
       .select(INVOICE_COLUMNS)
+      .eq("created_by", ownerId)
       .gte("invoice_date", from)
       .lte("invoice_date", to)
       .order("invoice_date", { ascending: false })
@@ -127,12 +134,14 @@ export async function loadReport(raw: {
     return { view: emptyReport(range), invoices: [] };
   }
 
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const [loaded, activeResult] = await Promise.all([
-    invoicesInRange(supabase, range.from, range.to),
+    invoicesInRange(supabase, ownerId, range.from, range.to),
     supabase
       .from("beneficiaries")
       .select("id", { count: "exact", head: true })
+      .eq("created_by", ownerId)
       .eq("is_active", true),
   ]);
   if (activeResult.error) throw new Error(activeResult.error.message);

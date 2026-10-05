@@ -44,7 +44,7 @@ function BankForm({
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
-    notify("Bank account saved.");
+    notify("Bank account saved successfully.");
     onSaved(state.saved, state.clearedDefaultId ?? null);
     invalidateInvoiceFormOptions();
   }, [notify, state, onSaved]);
@@ -174,7 +174,7 @@ function AccountCard({
     if (!activeState.saved || handledActive.current === activeState) return;
     handledActive.current = activeState;
     const saved = activeState.saved;
-    notify(saved.isActive ? "Bank account activated." : "Bank account deactivated.");
+    notify(saved.isActive ? "Bank account activated successfully." : "Bank account deactivated successfully.");
     onChanged((current) =>
       sortBankAccounts(
         current.map((item) =>
@@ -189,7 +189,7 @@ function AccountCard({
   useEffect(() => {
     if (!deleteState.deletedId || handledDelete.current === deleteState) return;
     handledDelete.current = deleteState;
-    notify("Bank account deleted.");
+    notify("Bank account deleted successfully.");
     const deletedId = deleteState.deletedId;
     onChanged((current) => current.filter((item) => item.id !== deletedId));
     invalidateInvoiceFormOptions();

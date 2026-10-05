@@ -168,8 +168,8 @@ export function PaymentList({
               onChanged(
                 saved,
                 saved.invoiceStatus === "paid"
-                  ? "Payment recorded. The invoice is now paid."
-                  : "Payment recorded.",
+                  ? "Invoice marked as paid successfully."
+                  : "Payment recorded successfully.",
               )
             }
           />
@@ -326,7 +326,7 @@ export function PaymentList({
         onSaved={(saved) =>
           onChanged(
             saved,
-            saved.invoiceStatus === "paid" ? "Payment saved. The invoice is now paid." : "Payment saved.",
+            saved.invoiceStatus === "paid" ? "Invoice marked as paid successfully." : "Payment updated successfully.",
           )
         }
       />
@@ -334,7 +334,7 @@ export function PaymentList({
         payment={deleting}
         open={deleting !== null}
         onClose={() => setDeleting(null)}
-        onDeleted={(saved) => onChanged(saved, "Payment deleted.")}
+        onDeleted={(saved) => onChanged(saved, "Payment deleted successfully.")}
       />
     </section>
   );

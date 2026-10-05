@@ -14,7 +14,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function AdminSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <StatCardsSkeleton count={3} />
+      <StatCardsSkeleton count={4} />
       <TableSkeleton rows={5} label="Loading users…" />
     </div>
   );

@@ -59,24 +59,29 @@ async function logoPreviewUrl(
   return signed.data?.signedUrl ?? null;
 }
 
+export async function organizationInvoiceRefs(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  const { data, error } = await supabase.rpc("organization_invoice_refs");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as InvoiceRef[];
+}
+
 export async function loadPortalSettings(): Promise<PortalSettings> {
   const supabase = await createClient();
-  const [companyResult, banksResult, sequencesResult, invoicesResult] = await Promise.all([
+  const [companyResult, banksResult, sequencesResult, invoices] = await Promise.all([
     supabase.from("company_settings").select(COMPANY_COLUMNS).eq("id", true).maybeSingle(),
     supabase.from("bank_accounts").select(BANK_COLUMNS),
     supabase
       .from("invoice_sequences")
       .select("id, period, next_number, updated_at")
       .order("period", { ascending: false }),
-    supabase.from("invoices").select("invoice_number, bank_account_id"),
+    organizationInvoiceRefs(supabase),
   ]);
 
   if (companyResult.error) throw new Error(companyResult.error.message);
   if (banksResult.error) throw new Error(banksResult.error.message);
   if (sequencesResult.error) throw new Error(sequencesResult.error.message);
-  if (invoicesResult.error) throw new Error(invoicesResult.error.message);
-
-  const invoices = (invoicesResult.data ?? []) as InvoiceRef[];
   const usage = new Map<string, number>();
   for (const invoice of invoices) {
     if (!invoice.bank_account_id) continue;

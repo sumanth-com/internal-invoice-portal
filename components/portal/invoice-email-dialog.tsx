@@ -79,9 +79,9 @@ function EmailInvoiceForm({
     if (!current.sent || sentToast.current) return;
     sentToast.current = true;
     setSent(true);
-    notify(`Invoice sent to ${recipient}.`);
+    notify("Invoice email sent successfully.");
     requestNotificationRefresh();
-  }, [current.sent, notify, recipient]);
+  }, [current.sent, notify]);
 
   if (sent) {
     return (
@@ -212,7 +212,7 @@ export function InvoiceEmailButton({
             type="button"
             variant="ghost"
             size="icon"
-            className="size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800"
+            className="size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800 dark:border-white/15 dark:bg-white/10 dark:text-white dark:shadow-none dark:hover:bg-white/20 dark:hover:text-white"
             aria-label="Email invoice"
             onClick={() => setOpen(true)}
           >

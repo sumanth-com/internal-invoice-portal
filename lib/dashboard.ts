@@ -1,3 +1,5 @@
+import { activeOwnerId } from "@/lib/owner-scope";
+import { invoiceNumberSearchTerms } from "@/lib/invoice";
 import { createClient } from "@/lib/supabase/server";
 
 export type InvoiceStatus = "draft" | "issued" | "paid" | "cancelled";
@@ -58,7 +60,10 @@ function beneficiaryName(
 ) {
   const legalName = names.get(beneficiaryId)?.trim();
   if (legalName) return legalName;
-  const billedTo = billTo?.trim();
+  const billedTo = billTo
+    ?.split(/\r?\n/)
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
   return billedTo || "—";
 }
 
@@ -70,11 +75,13 @@ function embeddedBeneficiary(
 
 async function countInvoices(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   status?: InvoiceStatus,
 ) {
   let query = supabase
     .from("invoices")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("created_by", ownerId);
 
   if (status) {
     query = query.eq("status", status);
@@ -87,18 +94,33 @@ async function countInvoices(
 
 export async function loadDashboard(rawSearch: string | undefined): Promise<DashboardData> {
   const search = normalizeInvoiceSearch(rawSearch);
+  const ownerId = await activeOwnerId();
   const supabase = await createClient();
   const listLimit = search ? SEARCH_LIMIT : RECENT_LIMIT;
+  if (!ownerId) {
+    return {
+      total: 0,
+      draft: 0,
+      issued: 0,
+      paid: 0,
+      cancelled: 0,
+      beneficiaryCount: 0,
+      invoices: [],
+      search,
+      truncated: false,
+    };
+  }
 
   const counts = Promise.all([
-    countInvoices(supabase),
-    countInvoices(supabase, "draft"),
-    countInvoices(supabase, "issued"),
-    countInvoices(supabase, "paid"),
-    countInvoices(supabase, "cancelled"),
+    countInvoices(supabase, ownerId),
+    countInvoices(supabase, ownerId, "draft"),
+    countInvoices(supabase, ownerId, "issued"),
+    countInvoices(supabase, ownerId, "paid"),
+    countInvoices(supabase, ownerId, "cancelled"),
     supabase
       .from("beneficiaries")
       .select("id", { count: "exact", head: true })
+      .eq("created_by", ownerId)
       .then(({ count, error }) => {
         if (error) throw error;
         return count ?? 0;
@@ -110,6 +132,7 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     const { data, error } = await supabase
       .from("beneficiaries")
       .select("id")
+      .eq("created_by", ownerId)
       .ilike("legal_name", `%${search}%`);
     if (error) throw error;
     beneficiaryIds = (data ?? []).map((row) => row.id);
@@ -120,15 +143,16 @@ export async function loadDashboard(rawSearch: string | undefined): Promise<Dash
     .select(
       "id, invoice_number, invoice_date, status, subtotal, cgst_amount, sgst_amount, igst_amount, gst_amount, total, tds_amount, balance_due, currency, bill_to, beneficiary_id, beneficiaries(legal_name, email)",
     )
+    .eq("created_by", ownerId)
     .order("created_at", { ascending: false })
     .limit(listLimit + 1);
 
   if (search) {
-    const pattern = `"%${search.replaceAll('"', "")}%"`;
-    const filters = [
-      `invoice_number.ilike.${pattern}`,
-      `bill_to.ilike.${pattern}`,
-    ];
+    const pattern = (term: string) => `"%${term.replaceAll('"', "")}%"`;
+    const filters = invoiceNumberSearchTerms(search).map(
+      (term) => `invoice_number.ilike.${pattern(term)}`,
+    );
+    filters.push(`bill_to.ilike.${pattern(search)}`);
     if (beneficiaryIds.length > 0) {
       filters.push(`beneficiary_id.in.(${beneficiaryIds.join(",")})`);
     }

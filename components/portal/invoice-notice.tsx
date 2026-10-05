@@ -3,10 +3,10 @@
 import { ActionNotice } from "@/components/portal/modal-triggers";
 
 const messages = {
-  saved: "Invoice draft saved.",
-  issued: "Invoice issued.",
-  cancelled: "Invoice cancelled.",
-  deleted: "Draft invoice deleted.",
+  saved: "Invoice saved successfully.",
+  issued: "Invoice issued successfully.",
+  cancelled: "Invoice cancelled successfully.",
+  deleted: "Invoice deleted successfully.",
 } as const;
 
 export function InvoiceNotice({ notice }: { notice: keyof typeof messages }) {

@@ -7,6 +7,7 @@ import {
   kolkataDayStart,
   kolkataNextDayStart,
   normalizeAuditAction,
+  auditToOnOrAfterFrom,
   normalizeAuditDate,
   normalizeAuditGroup,
   normalizeAuditPage,
@@ -20,11 +21,12 @@ import {
   type AuditLogPage,
 } from "@/lib/audit";
 import { invoiceToday } from "@/lib/invoice";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 const AUDIT_COLUMNS = `
   id, invoice_id, actor_id, action, metadata, created_at,
-  invoices ( invoice_number, currency ),
+  invoices!inner ( invoice_number, currency, created_by ),
   profiles ( full_name, email )
 `;
 
@@ -78,9 +80,13 @@ function mapEntry(row: AuditRow, sourceNumbers: ReadonlyMap<string, string>): Au
 
 async function countEvents(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   filter?: { from?: string; to?: string; actions?: readonly AuditAction[] },
 ) {
-  let query = supabase.from("invoice_audit_log").select("id", { count: "exact", head: true });
+  let query = supabase
+    .from("invoice_audit_log")
+    .select("id, invoices!inner(created_by)", { count: "exact", head: true })
+    .eq("invoices.created_by", ownerId);
   if (filter?.from) query = query.gte("created_at", filter.from);
   if (filter?.to) query = query.lt("created_at", filter.to);
   if (filter?.actions) query = query.in("action", [...filter.actions]);
@@ -91,6 +97,7 @@ async function countEvents(
 
 function filteredEntries(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   filters: {
     action: AuditLogPage["action"];
     group: AuditLogPage["group"];
@@ -104,6 +111,7 @@ function filteredEntries(
   let query = supabase
     .from("invoice_audit_log")
     .select(AUDIT_COLUMNS, { count: "exact" })
+    .eq("invoices.created_by", ownerId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
 
@@ -121,11 +129,17 @@ function filteredEntries(
 
 async function searchTargets(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   search: string,
 ) {
   const pattern = `"%${search.replaceAll('"', "")}%"`;
   const [invoices, actors] = await Promise.all([
-    supabase.from("invoices").select("id").ilike("invoice_number", `%${search}%`).limit(100),
+    supabase
+      .from("invoices")
+      .select("id")
+      .eq("created_by", ownerId)
+      .ilike("invoice_number", `%${search}%`)
+      .limit(100),
     supabase
       .from("profiles")
       .select("id")
@@ -158,22 +172,23 @@ export async function loadAuditLog(raw: {
   const user = normalizeAuditUser(raw.user);
   const month = currentMonthRange();
   const from = normalizeAuditDate(raw.from) || month.from;
-  const to = normalizeAuditDate(raw.to) || month.to;
+  const to = auditToOnOrAfterFrom(from, normalizeAuditDate(raw.to) || month.to);
   const page = normalizeAuditPage(raw.page);
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const today = invoiceToday();
 
   const listFilters = { action, group, user, from, to, page, searchFilters: null };
   const [total, todayCount, paymentEvents, usersResult, searchFilters, initialList] = await Promise.all([
-    countEvents(supabase),
-    countEvents(supabase, {
+    countEvents(supabase, ownerId),
+    countEvents(supabase, ownerId, {
       from: kolkataDayStart(today),
       to: kolkataNextDayStart(today),
     }),
-    countEvents(supabase, { actions: PAYMENT_AUDIT_ACTIONS }),
+    countEvents(supabase, ownerId, { actions: PAYMENT_AUDIT_ACTIONS }),
     supabase.from("profiles").select("id, full_name, email").order("full_name", { ascending: true }),
-    search ? searchTargets(supabase, search) : Promise.resolve<string[] | null>(null),
-    search ? Promise.resolve(null) : filteredEntries(supabase, listFilters),
+    search ? searchTargets(supabase, ownerId, search) : Promise.resolve<string[] | null>(null),
+    search ? Promise.resolve(null) : filteredEntries(supabase, ownerId, listFilters),
   ]);
 
   if (usersResult.error) throw new Error(usersResult.error.message);
@@ -205,7 +220,7 @@ export async function loadAuditLog(raw: {
 
   const listed =
     initialList ??
-    (await filteredEntries(supabase, { ...listFilters, searchFilters }));
+    (await filteredEntries(supabase, ownerId, { ...listFilters, searchFilters }));
   const { data, error, count } = listed;
   if (error) throw new Error(error.message);
 
@@ -219,7 +234,11 @@ export async function loadAuditLog(raw: {
   ];
   const sourceNumbers = new Map<string, string>();
   if (sourceIds.length > 0) {
-    const sources = await supabase.from("invoices").select("id, invoice_number").in("id", sourceIds);
+    const sources = await supabase
+      .from("invoices")
+      .select("id, invoice_number")
+      .eq("created_by", ownerId)
+      .in("id", sourceIds);
     if (sources.error) throw new Error(sources.error.message);
     for (const source of sources.data ?? []) {
       if (source.invoice_number) sourceNumbers.set(source.id, source.invoice_number);

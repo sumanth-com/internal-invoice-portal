@@ -87,7 +87,7 @@ export function CompanySettingsSection({
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
-    notify("Company details saved.");
+    notify("Settings saved successfully.");
     setValues((current) => ({ ...current, ...state.saved, exists: true }));
     const nextPhone = splitStoredPhone(state.saved.phone, state.saved.country);
     setDial(nextPhone.dial);

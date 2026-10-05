@@ -58,8 +58,8 @@ export function InvoicePayments({
     );
     notify(
       saved.invoiceStatus === "paid"
-        ? "Payment recorded. The invoice is now paid."
-        : "Payment recorded.",
+        ? "Invoice marked as paid successfully."
+        : "Payment recorded successfully.",
     );
     if (saved.invoiceStatus === "paid") requestNotificationRefresh();
     startTransition(() => router.refresh());

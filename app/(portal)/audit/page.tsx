@@ -13,8 +13,10 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function AuditSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <StatCardsSkeleton count={4} />
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <div className="shrink-0">
+        <StatCardsSkeleton count={4} />
+      </div>
       <TableSkeleton rows={6} label="Loading activity…" />
     </div>
   );

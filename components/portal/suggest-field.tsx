@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 function useAnchoredMenu(open: boolean, rootRef: RefObject<HTMLDivElement | null>) {
   const menuRef = useRef<HTMLUListElement>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
-  const [frame, setFrame] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [frame, setFrame] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -20,26 +20,51 @@ function useAnchoredMenu(open: boolean, rootRef: RefObject<HTMLDivElement | null
       const current = rootRef.current;
       if (!current) return;
       const rect = current.getBoundingClientRect();
-      const top = rect.bottom + 4;
+      const margin = 12;
+      const gap = 4;
+      const below = Math.max(0, window.innerHeight - rect.bottom - margin - gap);
+      const above = Math.max(0, rect.top - margin - gap);
+      const openUp = below < 220 && above > below;
+      const maxHeight = Math.min(288, openUp ? above : below);
+      const top = openUp ? Math.max(margin, rect.top - gap - maxHeight) : rect.bottom + gap;
       const left = rect.left;
       const width = rect.width;
-      setFrame((current) =>
-        current && current.top === top && current.left === left && current.width === width
-          ? current
-          : { top, left, width },
+      setFrame((currentFrame) =>
+        currentFrame &&
+        currentFrame.top === top &&
+        currentFrame.left === left &&
+        currentFrame.width === width &&
+        currentFrame.maxHeight === maxHeight
+          ? currentFrame
+          : { top, left, width, maxHeight },
       );
+    }
+
+    function onScroll(event: Event) {
+      const menu = menuRef.current;
+      if (menu && event.target instanceof Node && menu.contains(event.target)) return;
+      place();
     }
 
     place();
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open, rootRef]);
 
   return { menuRef, host, frame };
+}
+
+function scrollOptionIntoMenu(menu: HTMLElement | null) {
+  const option = menu?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]');
+  if (!menu || !option) return;
+  const menuRect = menu.getBoundingClientRect();
+  const optionRect = option.getBoundingClientRect();
+  if (optionRect.top < menuRect.top) menu.scrollTop -= menuRect.top - optionRect.top;
+  else if (optionRect.bottom > menuRect.bottom) menu.scrollTop += optionRect.bottom - menuRect.bottom;
 }
 
 function AnchoredMenu({
@@ -53,7 +78,7 @@ function AnchoredMenu({
 }: {
   open: boolean;
   host: HTMLElement | null;
-  frame: { top: number; left: number; width: number } | null;
+  frame: { top: number; left: number; width: number; maxHeight: number } | null;
   menuRef: RefObject<HTMLUListElement | null>;
   id: string;
   className?: string;
@@ -65,9 +90,10 @@ function AnchoredMenu({
       ref={menuRef}
       id={id}
       role="listbox"
-      style={{ top: frame.top, left: frame.left, width: frame.width }}
+      style={{ top: frame.top, left: frame.left, width: frame.width, maxHeight: frame.maxHeight }}
+      onWheel={(event) => event.stopPropagation()}
       className={cn(
-        "fixed z-50 max-h-56 overflow-auto rounded-md border bg-card py-1 text-sm shadow-md",
+        "fixed z-50 overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border bg-card py-1 text-sm shadow-md",
         className,
       )}
     >
@@ -162,9 +188,7 @@ export function SuggestField({
 
   useEffect(() => {
     if (!visible) return;
-    menuRef.current
-      ?.querySelector('[role="option"][aria-selected="true"]')
-      ?.scrollIntoView({ block: "nearest" });
+    scrollOptionIntoMenu(menuRef.current);
   }, [active, visible, menuRef]);
 
   function choose(option: { value: string }) {
@@ -335,9 +359,7 @@ export function ChoiceSelect({
 
   useEffect(() => {
     if (!open) return;
-    menuRef.current
-      ?.querySelector('[role="option"][aria-selected="true"]')
-      ?.scrollIntoView({ block: "nearest" });
+    scrollOptionIntoMenu(menuRef.current);
   }, [active, open, menuRef]);
 
   function choose(next: string) {

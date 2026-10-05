@@ -1,4 +1,4 @@
-import { datesAreCurrentMonth, formatMoney, statusLabel, type InvoiceStatus } from "@/lib/invoice";
+import { datesAreCurrentMonth, formatMoney, periodDateBounds, statusLabel, type InvoiceStatus } from "@/lib/invoice";
 import { isPaymentMode, paymentModeLabel } from "@/lib/payment";
 
 export const AUDIT_PAGE_SIZE = 40;
@@ -136,6 +136,12 @@ export function normalizeAuditUser(value: string | undefined) {
 export function normalizeAuditDate(value: string | undefined) {
   const text = (value ?? "").trim();
   return DATE_PATTERN.test(text) ? text : "";
+}
+
+export function auditToOnOrAfterFrom(from: string, to: string) {
+  if (!from || !to || to >= from) return to;
+  const end = periodDateBounds(`${from.slice(0, 4)}${from.slice(5, 7)}`).end;
+  return end < from ? from : end;
 }
 
 export function normalizeAuditPage(value: string | undefined) {

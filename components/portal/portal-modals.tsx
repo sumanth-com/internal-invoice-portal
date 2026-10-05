@@ -288,7 +288,7 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
       beneficiaryRequest?.onSaved?.(beneficiary);
       subscribers.current.forEach((handler) => handler(beneficiary, mode));
       setBeneficiaryOpen(false);
-      notify(mode === "create" ? "Beneficiary added." : "Beneficiary saved.");
+      notify(mode === "create" ? "Beneficiary created successfully." : "Beneficiary updated successfully.");
       requestNotificationRefresh();
     },
     [beneficiaryRequest, notify],

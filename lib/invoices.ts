@@ -25,6 +25,7 @@ import {
   type InvoiceStatus,
   type InvoiceSummary,
 } from "@/lib/invoice";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 type SummaryRow = {
@@ -39,6 +40,7 @@ type SummaryRow = {
   balance_due: number | string;
   currency: string;
   beneficiary_id: string;
+  bill_to: string | null;
   beneficiaries: { legal_name: string } | { legal_name: string }[] | null;
 };
 
@@ -46,10 +48,18 @@ function money(value: number | string) {
   return Number(value);
 }
 
+function storedPartyName(value: string | null | undefined) {
+  const line = value
+    ?.split(/\r?\n/)
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  return line || "—";
+}
+
 function beneficiaryName(row: SummaryRow) {
   const embedded = row.beneficiaries;
   const record = Array.isArray(embedded) ? embedded[0] : embedded;
-  return record?.legal_name?.trim() || "—";
+  return record?.legal_name?.trim() || storedPartyName(row.bill_to);
 }
 
 function mapSummary(row: SummaryRow, paymentStanding: InvoicePaymentStanding): InvoiceSummary {
@@ -135,10 +145,12 @@ function mapBank(row: {
 
 async function countInvoices(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
 ) {
   const { count, error } = await supabase
     .from("invoices")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("created_by", ownerId);
   if (error) throw error;
   return count ?? 0;
 }
@@ -159,10 +171,12 @@ export async function loadInvoices(raw: {
   const from = normalizeInvoiceDateFilter(raw.from);
   const to = normalizeInvoiceDateFilter(raw.to);
   const sort: InvoiceSort = normalizeInvoiceSort(raw.sort);
+  const ownerId = await activeOwnerId();
   const supabase = await createClient();
   const beneficiaryOptions = supabase
     .from("beneficiaries")
     .select("id, legal_name")
+    .eq("created_by", ownerId ?? "")
     .order("legal_name", { ascending: true });
 
   let beneficiaryIds: string[] = [];
@@ -170,6 +184,7 @@ export async function loadInvoices(raw: {
     const { data, error } = await supabase
       .from("beneficiaries")
       .select("id")
+      .eq("created_by", ownerId ?? "")
       .ilike("legal_name", `%${search}%`);
     if (error) throw error;
     beneficiaryIds = (data ?? []).map((row) => row.id);
@@ -186,7 +201,10 @@ export async function loadInvoices(raw: {
   }
 
   if (paymentIds && paymentIds.length === 0) {
-    const [total, options] = await Promise.all([countInvoices(supabase), beneficiaryOptions]);
+    const [total, options] = await Promise.all([
+      countInvoices(supabase, ownerId ?? ""),
+      beneficiaryOptions,
+    ]);
     if (options.error) throw options.error;
     return {
       invoices: [],
@@ -206,8 +224,9 @@ export async function loadInvoices(raw: {
   let query = supabase
     .from("invoices")
     .select(
-      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id, beneficiaries(legal_name)",
+      "id, invoice_number, invoice_date, status, subtotal, gst_amount, total, tds_amount, balance_due, currency, beneficiary_id, bill_to, beneficiaries(legal_name)",
     )
+    .eq("created_by", ownerId ?? "")
     .limit(INVOICE_LIST_LIMIT + 1);
 
   if (paymentIds) query = query.in("id", paymentIds);
@@ -238,7 +257,7 @@ export async function loadInvoices(raw: {
 
   const [{ data, error }, total, options] = await Promise.all([
     query,
-    countInvoices(supabase),
+    countInvoices(supabase, ownerId ?? ""),
     beneficiaryOptions,
   ]);
   if (error) throw error;
@@ -298,6 +317,8 @@ function mapBeneficiaryOptions(
 
 export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
   if (!isInvoiceId(id)) return null;
+  const ownerId = await activeOwnerId();
+  if (!ownerId) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoices")
@@ -312,6 +333,7 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
        invoice_items ( id, position, hsn, description, quantity, rate, line_subtotal )`,
     )
     .eq("id", id)
+    .eq("created_by", ownerId)
     .maybeSingle();
 
   if (error) throw error;
@@ -352,7 +374,7 @@ export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
     id: data.id,
     invoiceNumber: data.invoice_number,
     beneficiaryId: data.beneficiary_id,
-    beneficiaryName: beneficiary?.legal_name?.trim() || "—",
+    beneficiaryName: beneficiary?.legal_name?.trim() || storedPartyName(data.bill_to),
     beneficiaryEmail: beneficiary?.email?.trim() || null,
     bankAccountId: data.bank_account_id,
     bank: bank ? mapBank(bank) : null,
@@ -392,6 +414,7 @@ export async function loadInvoiceFormOptions(selected?: {
   beneficiaryId?: string;
   bankAccountId?: string | null;
 }) {
+  const ownerId = await activeOwnerId();
   const supabase = await createClient();
   const [beneficiariesResult, banksResult, companyResult] = await Promise.all([
     supabase
@@ -399,6 +422,7 @@ export async function loadInvoiceFormOptions(selected?: {
       .select(
         "id, legal_name, contact_name, email, phone, address_line1, address_line2, city, state, postal_code, country, gstin, pan, is_active",
       )
+      .eq("created_by", ownerId ?? "")
       .order("legal_name", { ascending: true }),
     supabase
       .from("bank_accounts")

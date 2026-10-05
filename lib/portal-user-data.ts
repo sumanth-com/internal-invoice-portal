@@ -36,6 +36,7 @@ export async function loadPortalUsers(filters: {
     users: users.filter((user) => userMatchesFilters(user, view)),
     total: users.length,
     active: users.filter((user) => user.status === "active").length,
+    pending: users.filter((user) => user.status === "pending").length,
     inactive: users.filter((user) => user.status === "inactive").length,
     ...view,
   };

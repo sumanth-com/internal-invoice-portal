@@ -9,6 +9,7 @@ import {
   type BeneficiaryStatusFilter,
   type BeneficiarySummary,
 } from "@/lib/beneficiary";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 type BeneficiaryRow = {
@@ -74,11 +75,13 @@ export function mapBeneficiary(row: BeneficiaryRow): Beneficiary {
 
 async function countBeneficiaries(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   active: boolean,
 ) {
   const { count, error } = await supabase
     .from("beneficiaries")
     .select("id", { count: "exact", head: true })
+    .eq("created_by", ownerId)
     .eq("is_active", active);
   if (error) throw error;
   return count ?? 0;
@@ -92,11 +95,13 @@ export async function loadBeneficiaries(
   const search = normalizeBeneficiarySearch(rawSearch);
   const status: BeneficiaryStatusFilter = normalizeBeneficiaryStatus(rawStatus);
   const contact = normalizeBeneficiaryContact(rawContact);
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
 
   let listQuery = supabase
     .from("beneficiaries")
     .select("id, legal_name, contact_name, email, phone, gstin, city, is_active")
+    .eq("created_by", ownerId)
     .order("legal_name", { ascending: true })
     .limit(BENEFICIARY_LIST_LIMIT + 1);
 
@@ -107,6 +112,7 @@ export async function loadBeneficiaries(
   const namesQuery = supabase
     .from("beneficiaries")
     .select("contact_name")
+    .eq("created_by", ownerId)
     .not("contact_name", "is", null)
     .order("contact_name", { ascending: true });
 
@@ -128,8 +134,8 @@ export async function loadBeneficiaries(
   const [{ data, error }, namesResult, active, inactive] = await Promise.all([
     listQuery,
     namesQuery,
-    countBeneficiaries(supabase, true),
-    countBeneficiaries(supabase, false),
+    countBeneficiaries(supabase, ownerId, true),
+    countBeneficiaries(supabase, ownerId, false),
   ]);
 
   if (error) throw error;
@@ -164,11 +170,14 @@ export async function loadBeneficiaries(
 export async function loadBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isBeneficiaryId(id)) return null;
 
+  const ownerId = await activeOwnerId();
+  if (!ownerId) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("beneficiaries")
     .select(BENEFICIARY_COLUMNS)
     .eq("id", id)
+    .eq("created_by", ownerId)
     .maybeSingle();
 
   if (error) throw error;
@@ -176,8 +185,12 @@ export async function loadBeneficiary(id: string): Promise<Beneficiary | null> {
 }
 
 export async function invoiceBeneficiaryIds() {
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
-  const { data, error } = await supabase.from("invoices").select("beneficiary_id");
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("beneficiary_id")
+    .eq("created_by", ownerId);
   if (error) throw error;
   return new Set(
     (data ?? [])
@@ -189,8 +202,13 @@ export async function invoiceBeneficiaryIds() {
 export async function beneficiaryIdsOnInvoices(ids: string[]) {
   const unique = [...new Set(ids.filter(isBeneficiaryId))];
   if (unique.length === 0) return new Set<string>();
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
-  const { data, error } = await supabase.from("invoices").select("beneficiary_id").in("beneficiary_id", unique);
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("beneficiary_id")
+    .eq("created_by", ownerId)
+    .in("beneficiary_id", unique);
   if (error) throw error;
   return new Set(
     (data ?? [])
@@ -200,10 +218,12 @@ export async function beneficiaryIdsOnInvoices(ids: string[]) {
 }
 
 export async function beneficiaryHasInvoices(id: string) {
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const { count, error } = await supabase
     .from("invoices")
     .select("id", { count: "exact", head: true })
+    .eq("created_by", ownerId)
     .eq("beneficiary_id", id);
 
   if (error) throw error;

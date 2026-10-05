@@ -3,9 +3,9 @@
 import { ActionNotice } from "@/components/portal/modal-triggers";
 
 const messages = {
-  created: "Beneficiary added.",
-  updated: "Beneficiary saved.",
-  deleted: "Beneficiary deleted.",
+  created: "Beneficiary created successfully.",
+  updated: "Beneficiary updated successfully.",
+  deleted: "Beneficiary deleted successfully.",
 } as const;
 
 export function BeneficiaryNotice({

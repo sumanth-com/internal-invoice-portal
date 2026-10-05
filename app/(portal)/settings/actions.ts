@@ -8,6 +8,7 @@ import {
   storedLogoPath,
 } from "@/lib/company-logo";
 import { getPortalUser } from "@/lib/portal-user";
+import { organizationInvoiceRefs } from "@/lib/settings-data";
 import {
   BANK_COLUMNS,
   buildSequenceRow,
@@ -463,14 +464,14 @@ export async function deleteBankAccount(
   if (!isRecordId(id)) return { ...emptyBankMutationState, error: "This bank account was not found." };
 
   const supabase = await createClient();
-  const usage = await supabase
-    .from("invoices")
-    .select("id", { count: "exact", head: true })
-    .eq("bank_account_id", id);
-  if (usage.error) {
+  let usageCount = 0;
+  try {
+    const refs = await organizationInvoiceRefs(supabase);
+    usageCount = refs.filter((invoice) => invoice.bank_account_id === id).length;
+  } catch {
     return { ...emptyBankMutationState, error: "The bank account could not be deleted." };
   }
-  if ((usage.count ?? 0) > 0) {
+  if (usageCount > 0) {
     return {
       ...emptyBankMutationState,
       error: "This bank account is used on an invoice and cannot be deleted. Deactivate it instead.",
@@ -499,13 +500,17 @@ async function suffixesForPeriod(
   supabase: Awaited<ReturnType<typeof createClient>>,
   period: string,
 ) {
-  const numbers = await supabase
-    .from("invoices")
-    .select("invoice_number")
-    .like("invoice_number", isFinancialYearPeriod(period) ? `IF/${period}/%` : `${period}%`);
-  if (numbers.error) return { error: numbers.error.message, suffixes: [] as number[] };
+  let numbers: { invoice_number: string }[] = [];
+  try {
+    numbers = await organizationInvoiceRefs(supabase);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "The numbering counter could not be read.",
+      suffixes: [] as number[],
+    };
+  }
   const suffixes: number[] = [];
-  for (const row of numbers.data ?? []) {
+  for (const row of numbers) {
     const suffix = sequenceSuffix(row.invoice_number, period);
     if (suffix !== null) suffixes.push(suffix);
   }

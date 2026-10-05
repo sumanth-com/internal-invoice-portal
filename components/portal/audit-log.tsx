@@ -10,6 +10,7 @@ import {
   auditActionLabel,
   auditFiltersActive,
   auditLogHref,
+  auditToOnOrAfterFrom,
   formatAuditTimestamp,
   isPaymentAuditAction,
   type AuditAction,
@@ -328,6 +329,19 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
     startTransition(() => router.push("/audit"));
   }
 
+  function applyFrom(value: string) {
+    const nextTo = auditToOnOrAfterFrom(value, to);
+    setFrom(value);
+    setTo(nextTo);
+    pushFilters({ from: value, to: nextTo });
+  }
+
+  function applyTo(value: string) {
+    const nextTo = value && from && value < from ? from : value;
+    setTo(nextTo);
+    pushFilters({ to: nextTo });
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -418,20 +432,15 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
               type="date"
               value={from}
               aria-label="From date"
-              onChange={(event) => {
-                setFrom(event.target.value);
-                pushFilters({ from: event.target.value });
-              }}
+              onChange={(event) => applyFrom(event.target.value)}
               className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
             <Input
               type="date"
               value={to}
+              min={from || undefined}
               aria-label="To date"
-              onChange={(event) => {
-                setTo(event.target.value);
-                pushFilters({ to: event.target.value });
-              }}
+              onChange={(event) => applyTo(event.target.value)}
               className="h-9 w-40 shrink-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
           </form>
@@ -452,7 +461,7 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-auto">
               <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="text-center text-primary-foreground">

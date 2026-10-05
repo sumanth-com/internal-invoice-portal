@@ -56,7 +56,7 @@ export function ProfileForm({
   useEffect(() => {
     if (!state.savedAt || handledSave.current === state.savedAt) return;
     handledSave.current = state.savedAt;
-    notify("Profile saved.");
+    notify("Profile updated successfully.");
     const nextName = state.fullName?.trim() || "";
     setName(nextName);
     setBaselineName(nextName);

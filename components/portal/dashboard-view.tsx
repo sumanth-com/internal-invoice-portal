@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 
 const panelActionClass =
-  "size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800";
+  "size-9 rounded-full border border-violet-200/80 bg-white/80 text-violet-700 shadow-sm hover:bg-white hover:text-violet-800 dark:border-white/15 dark:bg-white/10 dark:text-white dark:shadow-none dark:hover:bg-white/20 dark:hover:text-white";
 
 const detailPanelClass =
   "relative overflow-hidden rounded-[28px] border border-violet-100 text-foreground shadow-sm dark:border-violet-900/40 dark:text-white";
@@ -143,13 +143,10 @@ export function DashboardView({ data }: { data: DashboardData }) {
   const router = useRouter();
   const [search, setSearch] = useState(data.search);
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "issued" | "paid">("all");
   const hasInvoices = data.total > 0;
   const hasBeneficiaries = data.beneficiaryCount > 0;
   const searching = data.search.length > 0;
-  const visibleInvoices = data.invoices.filter(
-    (invoice) => statusFilter === "all" || invoice.status === statusFilter,
-  );
+  const visibleInvoices = data.invoices;
   const selected =
     visibleInvoices.find((invoice) => invoice.id === pickedId) ?? preferredInvoice(visibleInvoices);
   useEffect(() => {
@@ -178,43 +175,9 @@ export function DashboardView({ data }: { data: DashboardData }) {
         <StatCard label="Cancelled invoices" value={data.cancelled} href="/invoices?status=cancelled" icon={Ban} />
       </div>
 
-      <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-        <div className="flex flex-wrap items-center gap-2">
-          {(
-            [
-              ["all", "All"],
-              ["draft", "Draft"],
-              ["issued", "Issued"],
-              ["paid", "Paid"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setStatusFilter(value)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                statusFilter === value
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-card text-muted-foreground shadow-sm ring-1 ring-border hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <CreateInvoiceButton className="rounded-full">
-            <Plus />
-            Create Invoice
-          </CreateInvoiceButton>
-          <AddBeneficiaryButton variant="outline" className="rounded-full">
-            <UserPlus />
-            Add Beneficiary
-          </AddBeneficiaryButton>
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <form
-          className="w-full justify-self-end lg:max-w-xs"
+          className="w-full sm:max-w-md"
           onSubmit={(event) => {
             event.preventDefault();
             const query = search.trim();
@@ -233,6 +196,16 @@ export function DashboardView({ data }: { data: DashboardData }) {
             />
           </div>
         </form>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <CreateInvoiceButton className="rounded-full">
+            <Plus />
+            Create Invoice
+          </CreateInvoiceButton>
+          <AddBeneficiaryButton variant="outline" className="rounded-full">
+            <UserPlus />
+            Add Beneficiary
+          </AddBeneficiaryButton>
+        </div>
       </div>
 
       {!hasBeneficiaries ? (
@@ -269,7 +242,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
             </div>
           ) : visibleInvoices.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              <p>{searching ? `No invoices match “${data.search}”.` : "No invoices in this view."}</p>
+              <p>{searching ? `No invoices match “${data.search}”.` : "No invoices yet."}</p>
               {searching ? (
                 <Link href="/dashboard" className="mt-2 font-medium text-foreground underline">
                   Show recent invoices
@@ -302,6 +275,8 @@ export function DashboardView({ data }: { data: DashboardData }) {
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{invoice.beneficiaryName}</span>
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {invoice.invoiceNumber}
+                          <span className="px-1">·</span>
                           {formatInvoiceDate(invoice.invoiceDate)}
                         </span>
                       </span>
@@ -329,9 +304,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
           message={
             !hasInvoices
               ? "No invoices yet."
-              : searching
-                ? "No invoices match this search."
-                : "No invoices in this view."
+              : "No invoices match this search."
           }
         />
       </section>
@@ -535,12 +508,12 @@ function PanelBackdrop() {
       <div className="absolute -bottom-24 right-10 size-72 rounded-full bg-sky-200/70 blur-2xl dark:bg-sky-500/15" />
       <div className="absolute -left-16 bottom-0 size-56 rounded-full bg-violet-200/80 blur-2xl dark:bg-violet-500/20" />
       <svg className="absolute -right-10 top-0 h-48 w-48" viewBox="0 0 160 160">
-        <circle cx="108" cy="42" r="58" fill="none" stroke="white" strokeWidth="16" opacity="0.7" />
-        <circle cx="118" cy="36" r="28" fill="rgb(244 114 182)" opacity="0.18" />
+        <circle cx="108" cy="42" r="58" fill="none" strokeWidth="16" className="stroke-white/70 dark:stroke-white/10" />
+        <circle cx="118" cy="36" r="28" className="fill-pink-400/20 dark:fill-fuchsia-400/10" />
       </svg>
       <svg className="absolute bottom-0 left-0 h-24 w-full" viewBox="0 0 400 80" preserveAspectRatio="none">
-        <path d="M0 46C80 46 130 16 210 30C290 44 330 18 400 28V80H0Z" fill="white" fillOpacity="0.45" />
-        <path d="M0 60C100 60 150 40 230 50C310 60 350 46 400 54V80H0Z" fill="rgb(221 214 254)" fillOpacity="0.45" />
+        <path d="M0 46C80 46 130 16 210 30C290 44 330 18 400 28V80H0Z" className="fill-white/45 dark:fill-white/[0.04]" />
+        <path d="M0 60C100 60 150 40 230 50C310 60 350 46 400 54V80H0Z" className="fill-violet-200/45 dark:fill-violet-400/10" />
       </svg>
     </div>
   );
@@ -605,7 +578,7 @@ function TextCard({
   icon: typeof FileText;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 shadow-sm dark:bg-white/10">
+    <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 shadow-sm dark:bg-[hsl(252,28%,16%)]">
       <p className="flex items-center gap-2 text-xs text-muted-foreground dark:text-white/70">
         <span className="flex size-7 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-white/10 dark:text-violet-200">
           <Icon className="size-3.5" />

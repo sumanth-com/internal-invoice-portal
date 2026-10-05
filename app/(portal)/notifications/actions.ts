@@ -1,7 +1,7 @@
 "use server";
 
 import { isNotificationKind, type PortalNotification } from "@/lib/notifications";
-import { getPortalUser } from "@/lib/portal-user";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN =
@@ -35,20 +35,21 @@ function isId(value: string) {
 }
 
 async function authorized() {
-  const user = await getPortalUser();
-  if (!user?.isActive) return null;
-  return createClient();
+  const ownerId = await activeOwnerId();
+  if (!ownerId) return null;
+  return { supabase: await createClient(), ownerId };
 }
 
 export async function listPortalNotifications(): Promise<
   { ok: true; items: PortalNotification[] } | { ok: false; error: string }
 > {
-  const supabase = await authorized();
-  if (!supabase) return { ok: false, error: "You do not have permission to view notifications." };
+  const access = await authorized();
+  if (!access) return { ok: false, error: "You do not have permission to view notifications." };
 
-  const { data, error } = await supabase
+  const { data, error } = await access.supabase
     .from("portal_notifications")
     .select("id, kind, title, message, subject, read_at, created_at")
+    .eq("user_id", access.ownerId)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -65,13 +66,14 @@ export async function setPortalNotificationRead(
   read: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isId(id)) return { ok: false, error: "This notification was not found." };
-  const supabase = await authorized();
-  if (!supabase) return { ok: false, error: "You do not have permission to update notifications." };
+  const access = await authorized();
+  if (!access) return { ok: false, error: "You do not have permission to update notifications." };
 
-  const { data, error } = await supabase
+  const { data, error } = await access.supabase
     .from("portal_notifications")
     .update({ read_at: read ? new Date().toISOString() : null })
     .eq("id", id)
+    .eq("user_id", access.ownerId)
     .select("id");
 
   if (error || !data?.length) return { ok: false, error: "The notification could not be updated." };
@@ -79,12 +81,13 @@ export async function setPortalNotificationRead(
 }
 
 export async function markAllPortalNotificationsRead(): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await authorized();
-  if (!supabase) return { ok: false, error: "You do not have permission to update notifications." };
+  const access = await authorized();
+  if (!access) return { ok: false, error: "You do not have permission to update notifications." };
 
-  const { error } = await supabase
+  const { error } = await access.supabase
     .from("portal_notifications")
     .update({ read_at: new Date().toISOString() })
+    .eq("user_id", access.ownerId)
     .is("read_at", null);
 
   if (error) return { ok: false, error: "Notifications could not be marked as read." };
@@ -96,10 +99,14 @@ export async function deletePortalNotifications(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const unique = [...new Set(ids)].filter(isId);
   if (unique.length === 0) return { ok: false, error: "This notification was not found." };
-  const supabase = await authorized();
-  if (!supabase) return { ok: false, error: "You do not have permission to delete notifications." };
+  const access = await authorized();
+  if (!access) return { ok: false, error: "You do not have permission to delete notifications." };
 
-  const { error } = await supabase.from("portal_notifications").delete().in("id", unique);
+  const { error } = await access.supabase
+    .from("portal_notifications")
+    .delete()
+    .eq("user_id", access.ownerId)
+    .in("id", unique);
   if (error) return { ok: false, error: "The notification could not be deleted." };
   return { ok: true };
 }

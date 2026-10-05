@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 export type ToastTone = "success" | "error" | "warning" | "info";
 
@@ -24,30 +25,39 @@ export type ToastItem = {
 
 const tones: Record<
   ToastTone,
-  { icon: typeof CircleCheck; panel: string; iconClass: string }
+  { icon: typeof CircleCheck; panel: string; iconClass: string; closeClass: string; align: string }
 > = {
   success: {
     icon: CircleCheck,
-    panel: "border-emerald-200 bg-card text-emerald-950 dark:border-emerald-900 dark:text-emerald-100",
-    iconClass: "text-emerald-600 dark:text-emerald-400",
+    panel: "border-transparent bg-emerald-600 text-white shadow-md",
+    iconClass: "text-white",
+    closeClass: "text-white/80 hover:bg-white/15 hover:text-white",
+    align: "items-center",
   },
   error: {
     icon: CircleAlert,
-    panel: "border-red-200 bg-card text-red-950 dark:border-red-900 dark:text-red-100",
+    panel: "border-red-200 bg-card text-red-950 shadow-lg dark:border-red-900 dark:text-red-100",
     iconClass: "text-red-600 dark:text-red-400",
+    closeClass: "text-current/70 hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    align: "items-start",
   },
   warning: {
     icon: TriangleAlert,
-    panel: "border-amber-200 bg-card text-amber-950 dark:border-amber-900 dark:text-amber-100",
+    panel: "border-amber-200 bg-card text-amber-950 shadow-lg dark:border-amber-900 dark:text-amber-100",
     iconClass: "text-amber-600 dark:text-amber-400",
+    closeClass: "text-current/70 hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    align: "items-start",
   },
   info: {
     icon: Info,
-    panel: "border-sky-200 bg-card text-sky-950 dark:border-sky-900 dark:text-sky-100",
+    panel: "border-sky-200 bg-card text-sky-950 shadow-lg dark:border-sky-900 dark:text-sky-100",
     iconClass: "text-sky-600 dark:text-sky-400",
+    closeClass: "text-current/70 hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    align: "items-start",
   },
 };
 
+const SUCCESS_TOAST_MS = 3800;
 const TOAST_MS = 4500;
 const TOAST_EXIT_MS = 180;
 
@@ -97,14 +107,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, TOAST_EXIT_MS);
   }, []);
 
+  const timers = useRef(new Map<string, number>());
+
   useEffect(() => {
-    const timers = toasts.flatMap((toast) =>
-      toast.leaving ? [] : [window.setTimeout(() => dismiss(toast.id), TOAST_MS)],
-    );
-    return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
+    const active = new Set<string>();
+    for (const toast of toasts) {
+      if (toast.leaving) continue;
+      const key = `${toast.id}:${toast.nonce}`;
+      active.add(key);
+      if (timers.current.has(key)) continue;
+      const delay = toast.tone === "success" ? SUCCESS_TOAST_MS : TOAST_MS;
+      timers.current.set(
+        key,
+        window.setTimeout(() => dismiss(toast.id), delay),
+      );
+    }
+    for (const [key, timer] of timers.current) {
+      if (active.has(key)) continue;
+      window.clearTimeout(timer);
+      timers.current.delete(key);
+    }
   }, [toasts, dismiss]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((timer) => window.clearTimeout(timer));
+      pending.clear();
+    };
+  }, []);
 
   const notify = useCallback((message: string, tone: ToastTone = "success") => {
     const text = message.trim();
@@ -136,60 +167,31 @@ function ToastViewport({
   toasts: ToastItem[];
   dismiss: (id: number) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const element = ref.current;
-    if (!element || typeof element.showPopover !== "function") return;
-
-    const show = () => {
-      try {
-        if (toasts.length === 0) {
-          if (element.matches(":popover-open")) element.hidePopover();
-          return;
-        }
-        if (!element.matches(":popover-open")) element.showPopover();
-      } catch {
-        // The popover API rejects the call while the document is inactive.
-      }
+    const pick = () => {
+      const open = document.querySelectorAll("dialog[open]");
+      const next = (open[open.length - 1] as HTMLElement | undefined) ?? document.body;
+      setHost((current) => (current === next ? current : next));
     };
-
-    let frame = 0;
-    const lift = () => {
-      if (toasts.length === 0) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => show());
-    };
-
-    const onToggle = (event: Event) => {
-      if (!(event instanceof ToggleEvent) || event.newState !== "closed") return;
-      if (document.querySelector("dialog[open]")) lift();
-    };
-
-    show();
-    element.addEventListener("toggle", onToggle);
-    const observer = new MutationObserver((records) => {
-      if (!records.some((record) => record.target instanceof HTMLDialogElement)) return;
-      lift();
-    });
+    pick();
+    const observer = new MutationObserver(pick);
     observer.observe(document.body, {
       subtree: true,
+      childList: true,
       attributes: true,
       attributeFilter: ["open"],
     });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      element.removeEventListener("toggle", onToggle);
-      observer.disconnect();
-    };
-  }, [toasts.length]);
+    return () => observer.disconnect();
+  }, []);
 
-  return (
+  if (!host || toasts.length === 0) return null;
+
+  return createPortal(
     <div
-      ref={ref}
-      popover="manual"
       aria-live="polite"
-      className="fixed bottom-auto left-4 right-4 top-4 z-[200] m-0 flex h-auto max-h-[calc(100dvh-2rem)] w-auto flex-col gap-2 overflow-y-auto border-0 bg-transparent p-0 shadow-none sm:left-auto sm:w-[22.5rem] [&:popover-open]:flex"
+      className="pointer-events-none fixed right-4 top-4 z-[300] flex w-[min(26.25rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] flex-col gap-2 overflow-y-auto"
     >
       {toasts.map((toast) => {
         const tone = tones[toast.tone];
@@ -199,26 +201,28 @@ function ToastViewport({
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
             className={cn(
-              "pointer-events-auto flex items-start gap-3 rounded-lg border px-3.5 py-3 text-sm shadow-lg",
+              "pointer-events-auto flex w-full gap-3 rounded-lg border px-4 py-3 text-sm",
+              tone.align,
               tone.panel,
               toast.leaving
                 ? "animate-out fade-out-0 slide-out-to-right-4 duration-200 fill-mode-forwards motion-reduce:animate-none"
                 : "animate-in fade-in-0 slide-in-from-top-2 slide-in-from-right-4 duration-200 motion-reduce:animate-none",
             )}
           >
-            <Icon className={cn("mt-0.5 size-4 shrink-0", tone.iconClass)} aria-hidden />
+            <Icon className={cn("size-4 shrink-0", toast.tone === "success" ? "" : "mt-0.5", tone.iconClass)} aria-hidden />
             <p className="min-w-0 flex-1 leading-5">{toast.message}</p>
             <button
               type="button"
               aria-label="Dismiss notification"
               onClick={() => dismiss(toast.id)}
-              className="shrink-0 rounded-md p-0.5 text-current/70 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
+              className={cn("shrink-0 rounded-md p-0.5 transition-colors", tone.closeClass)}
             >
               <X className="size-4" />
             </button>
           </div>
         );
       })}
-    </div>
+    </div>,
+    host,
   );
 }

@@ -279,7 +279,7 @@ export function BeneficiaryList({
       const saved = { ...beneficiary, isActive: result.isActive };
       setData((current) => applySaved(current, saved));
       setViewing((current) => (current?.id === beneficiary.id ? { ...current, isActive: result.isActive } : current));
-      notify(result.isActive ? `${beneficiary.legalName} is active.` : `${beneficiary.legalName} is inactive.`);
+      notify(result.isActive ? "Beneficiary marked as active successfully." : "Beneficiary marked as inactive successfully.");
       requestNotificationRefresh();
     },
     [busyId, notify],
@@ -456,7 +456,7 @@ export function BeneficiaryList({
                     <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">GSTIN</th>
                     <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Status</th>
                     <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">
-                      <span className="sr-only">Actions</span>
+                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -494,7 +494,7 @@ export function BeneficiaryList({
                           <IconAction label="Edit" onClick={() => editBeneficiary(beneficiary.id)}>
                             <Pencil />
                           </IconAction>
-                          {deletable.has(beneficiary.id) ? (
+                          {isAdmin ? (
                             <IconAction
                               label="Delete"
                               onClick={() => setDeleting(beneficiary)}

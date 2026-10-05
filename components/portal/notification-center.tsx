@@ -432,11 +432,13 @@ export function NotificationCenter() {
     }
     setSelected(new Set());
     setPendingDelete(null);
+    notify(ids.length > 1 ? "Notifications deleted successfully." : "Notification deleted successfully.");
   }
 
   function markEverythingRead() {
     markAllRead();
     setSelected(new Set());
+    notify("Notifications marked as read.");
   }
 
   return (
@@ -555,6 +557,7 @@ export function NotificationCenter() {
                             onRead={() => {
                               ignoreRowClick.current = true;
                               markRead(item.id);
+                              notify("Notification marked as read.");
                             }}
                             onUnread={() => {
                               ignoreRowClick.current = true;
@@ -576,7 +579,11 @@ export function NotificationCenter() {
               <DetailPanel
                 item={openItem}
                 onBack={() => setMobileDetail(false)}
-                onRead={() => openItem && markRead(openItem.id)}
+                onRead={() => {
+                  if (!openItem) return;
+                  markRead(openItem.id);
+                  notify("Notification marked as read.");
+                }}
                 onUnread={() => openItem && markUnread(openItem.id)}
                 onDelete={() => openItem && askDelete([openItem.id])}
               />

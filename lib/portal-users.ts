@@ -27,6 +27,7 @@ export type PortalUserList = {
   users: PortalUserRow[];
   total: number;
   active: number;
+  pending: number;
   inactive: number;
   search: string;
   role: UserRoleFilter;

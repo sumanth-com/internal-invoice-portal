@@ -23,6 +23,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ComponentType } from "react";
 
+function useHydrated() {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  return hydrated;
+}
+
 type NavItem = {
   href: string;
   label: string;
@@ -137,8 +143,9 @@ function HeaderIconLink({ item, pathname }: { item: NavItem; pathname: string })
 
 function NotificationsLink({ pathname }: { pathname: string }) {
   const { unreadCount } = useNotificationCenter();
+  const hydrated = useHydrated();
   const active = isActive(pathname, "/notifications");
-  const count = unreadCount > 0 ? unreadLabel(unreadCount) : null;
+  const count = hydrated && unreadCount > 0 ? unreadLabel(unreadCount) : null;
   return (
     <Link
       href="/notifications"
@@ -165,6 +172,7 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
   const pathname = usePathname();
   const { mobileOpen, setMobileOpen } = usePortalNav();
   const { unreadCount } = useNotificationCenter();
+  const hydrated = useHydrated();
   const primary = allowed(primaryNav, user);
   const more = allowed(moreNav, user);
   const canOpenSettings = user.role === "admin";
@@ -232,7 +240,7 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
             >
               <Bell className="size-4" />
               Notifications
-              {unreadCount > 0 ? (
+              {hydrated && unreadCount > 0 ? (
                 <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                   {unreadLabel(unreadCount)}
                 </span>

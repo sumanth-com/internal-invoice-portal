@@ -49,10 +49,10 @@ function statusPillClass(status: InvoiceStatus) {
 }
 
 function statusNotice(status: InvoiceStatus) {
-  if (status === "draft") return "Invoice set to draft.";
-  if (status === "issued") return "Invoice issued.";
-  if (status === "paid") return "Invoice marked paid.";
-  return "Invoice cancelled.";
+  if (status === "draft") return "Invoice saved as draft successfully.";
+  if (status === "issued") return "Invoice issued successfully.";
+  if (status === "paid") return "Invoice marked as paid successfully.";
+  return "Invoice cancelled successfully.";
 }
 
 function listDescription(data: InvoiceListData, filtering: boolean) {

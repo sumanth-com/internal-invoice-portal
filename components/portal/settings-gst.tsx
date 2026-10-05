@@ -45,7 +45,7 @@ function CurrencyField({
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
-    notify("Currency saved.");
+    notify("Settings saved successfully.");
     setValue(state.saved);
     onSaved(state.saved);
     invalidateInvoiceFormOptions();
@@ -127,7 +127,7 @@ export function GstDefaultsSection({
   useEffect(() => {
     if (!state.saved || handled.current === state) return;
     handled.current = state;
-    notify("GST details saved.");
+    notify("Settings saved successfully.");
     setEnabled(state.saved.defaultGstEnabled);
     setRate(rateText(state.saved.defaultGstRate));
     setGstin(state.saved.gstin);

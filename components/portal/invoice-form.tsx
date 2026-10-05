@@ -905,7 +905,7 @@ export function InvoiceForm({
           <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-full hidden h-4 bg-muted/30 xl:block sm:h-6" />
           <Section
             title="GST and totals"
-            description="Preview only. The database calculates the saved tax, balance due, and amount in words."
+            description="These amounts update as you edit the invoice."
           >
             <Field id="tds_amount" label="TDS" error={errors.tds_amount}>
               <Input

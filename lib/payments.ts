@@ -12,12 +12,13 @@ import {
   type PaymentListData,
   type PaymentRecord,
 } from "@/lib/payment";
+import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
 export const PAYMENT_COLUMNS = `
   id, invoice_id, amount, payment_date, payment_mode, reference, created_at,
   invoices!inner (
-    invoice_number, currency, beneficiary_id,
+    invoice_number, currency, beneficiary_id, bill_to, created_by,
     beneficiaries ( legal_name )
   ),
   profiles ( full_name, email )
@@ -37,6 +38,8 @@ export type PaymentRow = {
     invoice_number: string;
     currency: string;
     beneficiary_id: string;
+    bill_to: string | null;
+    created_by: string;
     beneficiaries: Embedded<{ legal_name: string }>;
   }>;
   profiles: Embedded<{ full_name: string | null; email: string | null }>;
@@ -61,7 +64,10 @@ export function mapPayment(row: PaymentRow): PaymentRecord {
     invoiceId: row.invoice_id,
     invoiceNumber: invoice?.invoice_number ?? "—",
     beneficiaryId: invoice?.beneficiary_id ?? "",
-    beneficiaryName: beneficiary?.legal_name?.trim() || "—",
+    beneficiaryName:
+      beneficiary?.legal_name?.trim() ||
+      invoice?.bill_to?.split(/\r?\n/).map((part) => part.trim()).find((part) => part.length > 0) ||
+      "—",
     paymentDate: row.payment_date,
     paymentMode: isPaymentMode(row.payment_mode) ? row.payment_mode : "other",
     reference: row.reference,
@@ -74,11 +80,13 @@ export function mapPayment(row: PaymentRow): PaymentRecord {
 
 async function invoiceIdsForSearch(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string,
   search: string,
 ) {
   const { data: beneficiaries, error: beneficiaryError } = await supabase
     .from("beneficiaries")
     .select("id")
+    .eq("created_by", ownerId)
     .ilike("legal_name", `%${search}%`);
   if (beneficiaryError) throw beneficiaryError;
 
@@ -89,12 +97,17 @@ async function invoiceIdsForSearch(
     filters.push(`beneficiary_id.in.(${beneficiaryIds.join(",")})`);
   }
 
-  const { data, error } = await supabase.from("invoices").select("id").or(filters.join(","));
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("created_by", ownerId)
+    .or(filters.join(","));
   if (error) throw error;
   return (data ?? []).map((row) => row.id);
 }
 
 export async function loadPaymentBeneficiaries(): Promise<PaymentBeneficiaryOption[]> {
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const pageSize = 1000;
   const rows: PaymentBeneficiaryOption[] = [];
@@ -103,6 +116,7 @@ export async function loadPaymentBeneficiaries(): Promise<PaymentBeneficiaryOpti
     const { data, error } = await supabase
       .from("beneficiaries")
       .select("id, legal_name")
+      .eq("created_by", ownerId)
       .order("legal_name", { ascending: true })
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
@@ -130,11 +144,13 @@ export async function loadPayments(raw: {
   const month = currentMonthRange();
   const from = normalizePaymentDate(raw.from) || month.from;
   const to = normalizePaymentDate(raw.to) || month.to;
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
 
   let query = supabase
     .from("invoice_payments")
     .select(PAYMENT_COLUMNS)
+    .eq("invoices.created_by", ownerId)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(PAYMENT_LIST_LIMIT + 1);
@@ -145,7 +161,7 @@ export async function loadPayments(raw: {
   if (to) query = query.lte("payment_date", to);
 
   if (search) {
-    const invoiceIds = await invoiceIdsForSearch(supabase, search);
+    const invoiceIds = await invoiceIdsForSearch(supabase, ownerId, search);
     const pattern = `"%${search.replaceAll('"', "")}%"`;
     const filters = [`reference.ilike.${pattern}`];
     if (invoiceIds.length > 0) filters.push(`invoice_id.in.(${invoiceIds.join(",")})`);
@@ -170,11 +186,13 @@ export async function loadPayments(raw: {
 
 export async function loadInvoicePayments(invoiceId: string) {
   if (!isInvoiceId(invoiceId)) return [];
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoice_payments")
     .select(PAYMENT_COLUMNS)
     .eq("invoice_id", invoiceId)
+    .eq("invoices.created_by", ownerId)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -182,12 +200,14 @@ export async function loadInvoicePayments(invoiceId: string) {
 }
 
 export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
+  const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, total, balance_due, currency, beneficiaries(legal_name), invoice_payments(amount)",
+      "id, invoice_number, total, balance_due, currency, bill_to, beneficiaries(legal_name), invoice_payments(amount)",
     )
+    .eq("created_by", ownerId)
     .eq("status", "issued")
     .order("invoice_number", { ascending: false });
   if (error) throw error;
@@ -208,7 +228,12 @@ export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
       {
         id: row.id,
         invoiceNumber: row.invoice_number,
-        beneficiaryName: beneficiary?.legal_name?.trim() || "—",
+        beneficiaryName:
+          beneficiary?.legal_name?.trim() ||
+          (typeof row.bill_to === "string"
+            ? row.bill_to.split(/\r?\n/).map((part) => part.trim()).find((part) => part.length > 0)
+            : "") ||
+          "—",
         currency: row.currency,
         total: money(row.total),
         amountPaid: balance.amountPaid,

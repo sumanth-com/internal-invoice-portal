@@ -32,7 +32,7 @@ import {
   type PortalUserRow,
 } from "@/lib/portal-users";
 import { cn } from "@/lib/utils";
-import { ChevronDown, CircleCheck, CircleOff, Loader2, MoreHorizontal, Plus, Search, Users } from "lucide-react";
+import { ChevronDown, CircleCheck, CircleOff, Clock, Loader2, MoreHorizontal, Plus, Search, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -55,6 +55,12 @@ const userWaves = {
     front: "M0 64C96 64 150 82 228 70C306 58 352 50 400 56V120H0Z",
     backClass: "fill-violet-100 dark:fill-violet-900",
     frontClass: "fill-violet-200 dark:fill-violet-700",
+  },
+  pending: {
+    back: "M0 38C84 38 140 20 218 32C296 44 348 22 400 30V120H0Z",
+    front: "M0 66C90 66 148 48 226 58C304 68 352 50 400 56V120H0Z",
+    backClass: "fill-teal-100 dark:fill-teal-900",
+    frontClass: "fill-teal-200 dark:fill-teal-700",
   },
   inactive: {
     back: "M0 42C72 28 138 24 214 38C292 52 346 36 400 26V120H0Z",
@@ -155,16 +161,32 @@ function displayName(user: PortalUserRow) {
   return user.fullName?.trim() || "—";
 }
 
+function countFor(status: PortalUserRow["status"], counts: Pick<PortalUserList, "active" | "pending" | "inactive">) {
+  if (status === "active") return counts.active;
+  if (status === "pending") return counts.pending;
+  return counts.inactive;
+}
+
+function withCount(
+  counts: Pick<PortalUserList, "active" | "pending" | "inactive">,
+  status: PortalUserRow["status"],
+  value: number,
+) {
+  if (status === "active") counts.active = value;
+  else if (status === "pending") counts.pending = value;
+  else counts.inactive = value;
+}
+
 function applySaved(data: PortalUserList, saved: PortalUserRow): PortalUserList {
   const previous = data.users.find((user) => user.id === saved.id);
-  let { total, active, inactive } = data;
+  const counts = { active: data.active, pending: data.pending, inactive: data.inactive };
+  let { total } = data;
   if (!previous) {
     total += 1;
-    if (saved.isActive) active += 1;
-    else inactive += 1;
-  } else if (previous.isActive !== saved.isActive) {
-    active += saved.isActive ? 1 : -1;
-    inactive += saved.isActive ? -1 : 1;
+    withCount(counts, saved.status, countFor(saved.status, counts) + 1);
+  } else if (previous.status !== saved.status) {
+    withCount(counts, previous.status, Math.max(0, countFor(previous.status, counts) - 1));
+    withCount(counts, saved.status, countFor(saved.status, counts) + 1);
   }
 
   const others = data.users.filter((user) => user.id !== saved.id);
@@ -174,7 +196,7 @@ function applySaved(data: PortalUserList, saved: PortalUserRow): PortalUserList 
       )
     : others;
 
-  return { ...data, users, total, active, inactive };
+  return { ...data, users, total, ...counts };
 }
 
 function removeDeleted(data: PortalUserList, id: string): PortalUserList {
@@ -185,6 +207,7 @@ function removeDeleted(data: PortalUserList, id: string): PortalUserList {
     users: data.users.filter((user) => user.id !== id),
     total: Math.max(0, data.total - 1),
     active: previous.status === "active" ? Math.max(0, data.active - 1) : data.active,
+    pending: previous.status === "pending" ? Math.max(0, data.pending - 1) : data.pending,
     inactive: previous.status === "inactive" ? Math.max(0, data.inactive - 1) : data.inactive,
   };
 }
@@ -689,7 +712,7 @@ export function AdminUsers({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total users"
           value={data.total}
@@ -708,6 +731,16 @@ export function AdminUsers({
           onSelect={() => {
             setStatus("active");
             pushFilters({ status: "active" });
+          }}
+        />
+        <StatCard
+          label="Pending"
+          value={data.pending}
+          icon={Clock}
+          tone="pending"
+          onSelect={() => {
+            setStatus("pending");
+            pushFilters({ status: "pending" });
           }}
         />
         <StatCard
@@ -778,39 +811,40 @@ export function AdminUsers({
           </FilterSelect>
         </div>
 
-        {data.users.length === 0 ? (
-          <div className="px-4 py-10">
-            <p className="text-sm text-muted-foreground">
-              {filtering ? "No users match these filters." : "No portal users yet."}
-            </p>
-            {filtering ? null : (
-              <Button type="button" className="mt-4" onClick={() => setAdding(true)}>
-                <Plus />
-                Add user
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="max-h-[32rem] overflow-auto">
-              <table className="w-full min-w-[52rem] border-separate border-spacing-0 text-sm">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-muted text-left text-foreground">
-                    {["Name", "Email", "Role", "Status", "Created", "Updated"].map((label) => (
-                      <th
-                        key={label}
-                        className="border-b bg-muted px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-                      >
-                        {label}
-                      </th>
-                    ))}
-                    <th className="border-b bg-muted px-4 py-3">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.users.map((user) => (
+        <div className="max-h-[32rem] overflow-auto">
+          <table className="w-full min-w-[52rem] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="text-left text-primary-foreground">
+                {["Name", "Email", "Role", "Status", "Created", "Updated"].map((label) => (
+                  <th
+                    key={label}
+                    className="border-b border-primary bg-primary px-4 py-3 text-xs font-semibold uppercase tracking-wide"
+                  >
+                    {label}
+                  </th>
+                ))}
+                <th className="border-b border-primary bg-primary px-4 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.users.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-16 text-center align-middle">
+                    <p className="text-sm text-muted-foreground">
+                      {filtering ? "No users match these filters." : "No portal users yet."}
+                    </p>
+                    {filtering ? null : (
+                      <Button type="button" className="mt-4" onClick={() => setAdding(true)}>
+                        <Plus />
+                        Add user
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                data.users.map((user) => (
                     <tr key={user.id} className="bg-card">
                       <td className="border-b px-4 py-3 font-medium">
                         {displayName(user)}
@@ -837,21 +871,22 @@ export function AdminUsers({
                           isSelf={user.id === currentUserId}
                           onEdit={() => setEditing(user)}
                           onDeactivate={() => setDeactivating(user)}
-                          onActivated={(saved) => onSaved(saved, "User activated.")}
-                          onResent={(saved) => onSaved(saved, "Invitation sent again.")}
+                          onActivated={(saved) => onSaved(saved, "User activated successfully.")}
+                          onResent={(saved) => onSaved(saved, "Invitation sent successfully.")}
                           onDelete={() => setDeleting(user)}
                         />
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="px-4 py-3 text-sm text-muted-foreground">
-              {data.users.length === 1 ? "1 user." : `${data.users.length} users.`}
-            </p>
-          </>
-        )}
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {data.users.length > 0 ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            {data.users.length === 1 ? "1 user." : `${data.users.length} users.`}
+          </p>
+        ) : null}
       </section>
 
       <Modal
@@ -863,12 +898,7 @@ export function AdminUsers({
       >
         <AddUserForm
           onSaved={(user) =>
-            onSaved(
-              user,
-              user.role === "admin"
-                ? "Invitation sent. The account is an Administrator."
-                : "Invitation sent. The account is a Team Member.",
-            )
+            onSaved(user, "Invitation sent successfully.")
           }
         />
       </Modal>
@@ -885,7 +915,7 @@ export function AdminUsers({
             key={editing.id}
             user={editing}
             isSelf={editing.id === currentUserId}
-            onSaved={(user) => onSaved(user, "User saved.")}
+            onSaved={(user) => onSaved(user, "User updated successfully.")}
           />
         ) : null}
       </Modal>
@@ -904,7 +934,7 @@ export function AdminUsers({
           <DeactivateUserForm
             key={deactivating.id}
             user={deactivating}
-            onSaved={(user) => onSaved(user, "User deactivated.")}
+            onSaved={(user) => onSaved(user, "User deactivated successfully.")}
           />
         ) : null}
       </Modal>
@@ -926,7 +956,7 @@ export function AdminUsers({
               const id = deleting.id;
               setData((current) => removeDeleted(current, id));
               setDeleting(null);
-              notify("Invitation deleted.");
+              notify("Invitation deleted successfully.");
             }}
           />
         ) : null}
