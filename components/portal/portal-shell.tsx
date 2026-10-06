@@ -180,7 +180,7 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
   const notificationsActive = isActive(pathname, "/notifications");
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b bg-card">
+    <header className="sticky top-0 z-30 shrink-0 border-b bg-[#f6f4ef] dark:bg-card">
       <div className="relative flex h-[72px] items-center px-4 md:px-6">
         <Brand />
         <div className="pointer-events-none absolute inset-x-0 hidden justify-center xl:flex">
@@ -230,7 +230,7 @@ export function PortalTopNav({ user }: { user: PortalUser }) {
         </div>
       </div>
       {mobileOpen ? (
-        <nav className="border-t bg-card px-3 py-3 xl:hidden" aria-label="Portal">
+        <nav className="border-t bg-[#f6f4ef] px-3 py-3 dark:bg-card xl:hidden" aria-label="Portal">
           <div className="flex flex-col gap-1">
             <Link
               href="/notifications"

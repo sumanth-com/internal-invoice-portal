@@ -72,6 +72,11 @@
     background-color: #f6f4ef;
     color: #0f172a;
   }
+  html:not(.dark):has(.portal-shell),
+  html:not(.dark):has(.portal-shell) body,
+  html:not(.dark) .portal-shell {
+    background-color: #f6f4ef;
+  }
   .portal-shell {
     --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;

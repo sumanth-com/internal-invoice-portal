@@ -147,7 +147,12 @@ export function LoginForm() {
         {isLoading ? "SIGNING IN" : "LOGIN"}
         {isLoading ? null : <ArrowRight className="size-4" />}
       </Button>
-      <p className="mt-2 text-center text-[11px] text-slate-400">iFranchise Services Private Limited</p>
+      <div className="mt-3 text-center">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-300">Secure access</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+          Your workplace data is protected with enterprise-grade security.
+        </p>
+      </div>
     </form>
   );
 }

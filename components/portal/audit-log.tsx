@@ -404,10 +404,20 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
     pushFilters({ to: nextTo, dates: "range" });
   }
 
+  const canClearRange = Boolean(from || to);
+  const clearRangeLabel =
+    from && to
+      ? `${formatInvoiceDate(from)} to ${formatInvoiceDate(to)}`
+      : from
+        ? `${formatInvoiceDate(from)} onward`
+        : to
+          ? `through ${formatInvoiceDate(to)}`
+          : "";
+
   async function removeAllActivity() {
     setClearing(true);
     setClearError(null);
-    const result = await clearAuditLog();
+    const result = await clearAuditLog(from, to);
     setClearing(false);
     if (result.error) {
       setClearError(result.error);
@@ -467,6 +477,8 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
               type="button"
               variant="outline"
               className="shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10"
+              disabled={!canClearRange}
+              title={canClearRange ? `Delete activity from ${clearRangeLabel}` : "Select a date range to delete"}
               onClick={() => {
                 setClearError(null);
                 setConfirmClear(true);
@@ -631,8 +643,8 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
         onClose={() => {
           if (!clearing) setConfirmClear(false);
         }}
-        title="Delete all activity"
-        description="This removes every event from the audit log."
+        title="Delete activity in this range"
+        description={clearRangeLabel ? `This removes events from ${clearRangeLabel}.` : "Select a date range first."}
       >
         <ModalBody>
           {clearError ? (
@@ -641,7 +653,7 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
             </p>
           ) : (
             <p className="px-4 pt-4 text-sm text-muted-foreground sm:px-6">
-              The history shown here will be cleared. Invoice records stay as they are.
+              Events outside this range stay on the log. Invoice records stay as they are.
             </p>
           )}
         </ModalBody>
@@ -649,8 +661,8 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
           <Button type="button" variant="outline" onClick={() => setConfirmClear(false)} disabled={clearing}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" onClick={removeAllActivity} disabled={clearing}>
-            {clearing ? "Deleting…" : "Delete all"}
+          <Button type="button" variant="destructive" onClick={removeAllActivity} disabled={clearing || !canClearRange}>
+            {clearing ? "Deleting…" : "Delete"}
           </Button>
         </ModalFooter>
       </Modal>

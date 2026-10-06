@@ -162,6 +162,16 @@ export function kolkataNextDayStart(date: string) {
   return new Date(start.getTime() + 24 * 60 * 60 * 1000).toISOString();
 }
 
+export function auditDeleteBounds(from: string, to: string) {
+  const start = normalizeAuditDate(from);
+  const end = normalizeAuditDate(to);
+  if ((!start && !end) || (start && end && end < start)) return null;
+  return {
+    fromAt: start ? kolkataDayStart(start) : null,
+    toAt: end ? kolkataNextDayStart(end) : null,
+  };
+}
+
 export function formatAuditTimestamp(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

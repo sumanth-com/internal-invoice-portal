@@ -11,7 +11,7 @@ export function AuthScreen({
     return (
       <main className="flex min-h-svh items-center justify-center bg-muted/40 px-4 py-8 sm:py-10">
         <section className="w-full max-w-md rounded-xl border bg-card px-6 py-7 shadow-sm sm:px-8">
-          <div className="mb-6">
+          <div className="mb-6 flex justify-center">
             <PortalMark size={44} priority />
           </div>
           {children}

@@ -9,7 +9,7 @@ import { Suspense } from "react";
 
 function HeaderFallback() {
   return (
-    <header className="flex h-[72px] shrink-0 items-center justify-between border-b bg-card px-4 md:px-6">
+    <header className="flex h-[72px] shrink-0 items-center justify-between border-b bg-[#f6f4ef] px-4 md:px-6 dark:bg-card">
       <PortalBrand priority />
       <span className="size-8 animate-pulse rounded-full bg-muted" />
     </header>
@@ -58,13 +58,13 @@ export default function PortalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="portal-shell flex h-dvh flex-col overflow-hidden bg-background">
+    <div className="portal-shell flex h-dvh flex-col overflow-hidden bg-[#f6f4ef] dark:bg-background">
       <ToastProvider>
         <NotificationCenterProvider>
           <Suspense fallback={<HeaderFallback />}>
             <SignedInNav />
           </Suspense>
-          <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-muted/30 p-4 md:p-6 dark:bg-transparent">
+          <main className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#f6f4ef] p-4 md:p-6 dark:bg-transparent">
             <PortalModalsProvider>{children}</PortalModalsProvider>
           </main>
         </NotificationCenterProvider>

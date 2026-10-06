@@ -527,14 +527,13 @@ function badgeStyle(status: InvoiceDetail["status"]) {
   return s.badgeIssued;
 }
 
-function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
+function InvoiceDocument({ invoice, logo }: InvoicePdfData) {
   const from = partyBlock(invoice.billFrom, null);
   const to = partyBlock(invoice.billTo, invoice.stateCode);
   const money = (value: number) => formatMoney(value, invoice.currency);
   const taxes = taxLines(invoice);
   const lineGst = lineGstAmounts(invoice);
   const headerContact = (from.contact ?? "").split("\n").filter(Boolean).join("  ·  ");
-  const contact = [from.contact?.split("\n")[0], website].filter(Boolean).join("  ·  ");
   const storedTerms = invoice.paymentTerms?.trim() ?? "";
   const paymentTerms =
     storedTerms && storedTerms !== PAYMENT_TERMS ? `${PAYMENT_TERMS}\n${storedTerms}` : PAYMENT_TERMS;
@@ -565,7 +564,7 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
         ) : null}
         <View style={s.footerRule} fixed />
         <Text style={s.footerLeft} fixed>
-          {`iFranchise${contact ? `  ·  ${contact}` : ""}`}
+          This is an electronically generated invoice and does not require a signature.
         </Text>
         <Text
           style={s.footerRight}
