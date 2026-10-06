@@ -65,7 +65,7 @@ export function LoginForm() {
     <form onSubmit={handleLogin} className="grid gap-4" noValidate>
       <div className="mb-1 text-center">
         <h1 className="text-[1.7rem] font-semibold tracking-tight text-slate-950 dark:text-white">Welcome Back</h1>
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Please Login to your enterprise account</p>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Please sign in to your enterprise account</p>
       </div>
       {error ? (
         <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
@@ -144,7 +144,7 @@ export function LoginForm() {
         disabled={isLoading}
       >
         {isLoading ? <Loader2 className="animate-spin" /> : null}
-        {isLoading ? "SIGNING IN" : "LOGIN"}
+        {isLoading ? "SIGNING IN" : "SIGN IN"}
         {isLoading ? null : <ArrowRight className="size-4" />}
       </Button>
       <div className="mt-3 text-center">
