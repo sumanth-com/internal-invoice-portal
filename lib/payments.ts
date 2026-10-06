@@ -6,7 +6,6 @@ import {
   normalizePaymentModeFilter,
   normalizePaymentSearch,
   PAYMENT_LIST_LIMIT,
-  paymentBalance,
   type PayableInvoice,
   type PaymentBeneficiaryOption,
   type PaymentListData,
@@ -201,29 +200,38 @@ export async function loadInvoicePayments(invoiceId: string) {
 
 export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
   const ownerId = (await activeOwnerId()) ?? "";
+  if (!ownerId) return [];
   const supabase = await createClient();
+  const { data: balances, error: balanceError } = await supabase
+    .from("invoice_balances")
+    .select("invoice_id, amount_paid, outstanding, status")
+    .eq("status", "issued")
+    .gt("outstanding", 0);
+  if (balanceError) throw balanceError;
+
+  const eligible = (balances ?? []).filter(
+    (row) => row.status === "issued" && Number(row.outstanding) > 0,
+  );
+  if (eligible.length === 0) return [];
+
   const { data, error } = await supabase
     .from("invoices")
-    .select(
-      "id, invoice_number, total, balance_due, currency, bill_to, beneficiaries(legal_name), invoice_payments(amount)",
-    )
+    .select("id, invoice_number, total, currency, bill_to, beneficiaries(legal_name)")
     .eq("created_by", ownerId)
     .eq("status", "issued")
+    .in(
+      "id",
+      eligible.map((row) => row.invoice_id),
+    )
     .order("invoice_number", { ascending: false });
   if (error) throw error;
 
+  const byId = new Map(eligible.map((row) => [row.invoice_id, row]));
   return (data ?? []).flatMap((row) => {
-    const beneficiary = one(
-      row.beneficiaries as Embedded<{ legal_name: string }>,
-    );
-    const paid = roundMoney(
-      ((row.invoice_payments ?? []) as { amount: number | string }[]).reduce(
-        (sum, payment) => sum + money(payment.amount),
-        0,
-      ),
-    );
-    const balance = paymentBalance(money(row.balance_due), paid, "issued");
-    if (!(balance.outstanding > 0)) return [];
+    const balance = byId.get(row.id);
+    const outstanding = roundMoney(Number(balance?.outstanding ?? 0));
+    if (!(outstanding > 0)) return [];
+    const beneficiary = one(row.beneficiaries as Embedded<{ legal_name: string }>);
     return [
       {
         id: row.id,
@@ -231,13 +239,16 @@ export async function loadPayableInvoices(): Promise<PayableInvoice[]> {
         beneficiaryName:
           beneficiary?.legal_name?.trim() ||
           (typeof row.bill_to === "string"
-            ? row.bill_to.split(/\r?\n/).map((part) => part.trim()).find((part) => part.length > 0)
+            ? row.bill_to
+                .split(/\r?\n/)
+                .map((part) => part.trim())
+                .find((part) => part.length > 0)
             : "") ||
           "—",
         currency: row.currency,
         total: money(row.total),
-        amountPaid: balance.amountPaid,
-        outstanding: balance.outstanding,
+        amountPaid: roundMoney(Number(balance?.amount_paid ?? 0)),
+        outstanding,
       },
     ];
   });

@@ -11,7 +11,7 @@ import {
   type RecordedPayment,
 } from "@/lib/payment";
 import { isInvoiceId } from "@/lib/invoice";
-import { mapPayment, PAYMENT_COLUMNS, type PaymentRow } from "@/lib/payments";
+import { loadPayableInvoices, mapPayment, PAYMENT_COLUMNS, type PaymentRow } from "@/lib/payments";
 import { recordInvoiceNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
 import { createClient } from "@/lib/supabase/server";
@@ -23,6 +23,12 @@ function cents(value: number) {
 
 function denied(message: string): PaymentFormState {
   return { error: message, fieldErrors: {} };
+}
+
+export async function listPayableInvoices() {
+  const user = await getPortalUser();
+  if (!user?.isActive) return [];
+  return loadPayableInvoices();
 }
 
 export async function recordPayment(

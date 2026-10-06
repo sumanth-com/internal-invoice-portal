@@ -20,7 +20,6 @@ import {
   emptyGstFormState,
   emptyLogoState,
   emptyNumberingFormState,
-  isFinancialYearPeriod,
   isNumberingPeriod,
   isRecordId,
   mapBankAccount,

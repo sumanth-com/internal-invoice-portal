@@ -243,6 +243,7 @@ export async function issueInvoice(
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
+  revalidatePath("/payments");
   revalidatePath("/dashboard");
   await recordInvoiceNotification(id, "invoice_issued");
   redirect(`/invoices/${id}?notice=issued`);
@@ -286,6 +287,7 @@ export async function cancelInvoice(
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
+  revalidatePath("/payments");
   revalidatePath("/dashboard");
   await recordInvoiceNotification(id, "invoice_cancelled");
   redirect(`/invoices/${id}?notice=cancelled`);
@@ -324,6 +326,7 @@ export async function setInvoiceStatus(
 
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}`);
+  revalidatePath("/payments");
   revalidatePath("/dashboard");
   if (status === "issued" || status === "paid" || status === "cancelled") {
     await recordInvoiceNotification(

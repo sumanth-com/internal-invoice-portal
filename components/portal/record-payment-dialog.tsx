@@ -1,6 +1,6 @@
 "use client";
 
-import { recordPayment } from "@/app/(portal)/payments/actions";
+import { listPayableInvoices, recordPayment } from "@/app/(portal)/payments/actions";
 import { Modal, ModalBody, ModalFooter, useModal } from "@/components/portal/modal";
 import { useActionToast } from "@/components/portal/toasts";
 import { ChoiceSelect } from "@/components/portal/suggest-field";
@@ -45,24 +45,72 @@ function Balance({ invoice }: { invoice: PayableInvoice }) {
   );
 }
 
+function amountAboveOutstanding(amount: string, outstanding: number) {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return false;
+  return Math.round(value * 100) > Math.round(outstanding * 100);
+}
+
 function RecordPaymentForm({
-  invoices,
+  invoices: provided,
   presetId,
+  refreshOnOpen,
   onSaved,
 }: {
   invoices: PayableInvoice[];
   presetId?: string;
+  refreshOnOpen: boolean;
   onSaved: (saved: RecordedPayment) => void;
 }) {
   const modal = useModal();
   const [state, formAction, pending] = useActionState(recordPayment, emptyPaymentFormState);
-  const [invoiceId, setInvoiceId] = useState(presetId ?? invoices[0]?.id ?? "");
+  const [invoices, setInvoices] = useState(refreshOnOpen ? [] : provided);
+  const [loading, setLoading] = useState(refreshOnOpen);
+  const [invoiceId, setInvoiceId] = useState(presetId ?? "");
+  const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("neft");
   const handled = useRef<PaymentFormState | null>(null);
   const { setBusy, setDirty } = modal;
   const selected = invoices.find((invoice) => invoice.id === invoiceId) ?? null;
   const errors = state.fieldErrors;
+  const amountTooHigh = selected ? amountAboveOutstanding(amount, selected.outstanding) : false;
+  const amountError = errors.amount
+    ? errors.amount
+    : amountTooHigh && selected
+      ? `Amount cannot exceed the outstanding balance of ${formatMoney(selected.outstanding, selected.currency)}.`
+      : null;
   useActionToast(state, state.error, "error");
+
+  useEffect(() => {
+    if (!refreshOnOpen) return;
+    let cancelled = false;
+    listPayableInvoices()
+      .then((next) => {
+        if (cancelled) return;
+        setInvoices(next);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInvoices([]);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshOnOpen]);
+
+  useEffect(() => {
+    if (presetId) return;
+    setInvoiceId((current) =>
+      invoices.some((invoice) => invoice.id === current) ? current : (invoices[0]?.id ?? ""),
+    );
+  }, [invoices, presetId]);
+
+  const selectedOutstanding = selected?.outstanding;
+  useEffect(() => {
+    setAmount(selected ? selected.outstanding.toFixed(2) : "");
+  }, [selected, selectedOutstanding]);
 
   useEffect(() => {
     setBusy(pending);
@@ -80,7 +128,7 @@ function RecordPaymentForm({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (pending) return;
+        if (pending || !selected || amountTooHigh) return;
         const formData = new FormData(event.currentTarget);
         startTransition(() => formAction(formData));
       }}
@@ -93,35 +141,42 @@ function RecordPaymentForm({
         <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="payment-invoice">Invoice</Label>
-            <ChoiceSelect
-              id="payment-invoice"
-              label="Invoice"
-              value={invoiceId}
-              display="label"
-              disabled={Boolean(presetId) || invoices.length === 0}
-              invalid={Boolean(errors.invoice_id)}
-              onValue={(next) => {
-                setInvoiceId(next);
-                setDirty(true);
-              }}
-              choices={
-                invoices.length === 0
-                  ? [{ value: "", label: "No issued invoices" }]
-                  : invoices.map((invoice) => ({
-                      value: invoice.id,
-                      label: `${invoice.invoiceNumber} · ${invoice.beneficiaryName}`,
-                    }))
-              }
-            />
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading invoices…</p>
+            ) : invoices.length === 0 ? (
+              <div className="rounded-lg border px-3 py-4">
+                <p className="text-sm font-medium">No invoices available for payment</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Only issued invoices with an outstanding balance can be selected.
+                </p>
+              </div>
+            ) : (
+              <ChoiceSelect
+                id="payment-invoice"
+                label="Invoice"
+                value={invoiceId}
+                display="label"
+                disabled={Boolean(presetId)}
+                invalid={Boolean(errors.invoice_id)}
+                onValue={(next) => {
+                  setInvoiceId(next);
+                  setDirty(true);
+                }}
+                choices={invoices.map((invoice) => ({
+                  value: invoice.id,
+                  label: invoice.invoiceNumber,
+                  lines: [
+                    invoice.beneficiaryName,
+                    `Balance due: ${formatMoney(invoice.outstanding, invoice.currency)}`,
+                  ],
+                }))}
+              />
+            )}
             {errors.invoice_id ? (
               <p id="payment-invoice-error" className="text-sm text-destructive">
                 {errors.invoice_id}
               </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Only issued invoices with an outstanding balance can be selected.
-              </p>
-            )}
+            ) : null}
           </div>
 
           {selected ? <Balance invoice={selected} /> : null}
@@ -135,13 +190,15 @@ function RecordPaymentForm({
                 inputMode="decimal"
                 autoComplete="off"
                 required
-                aria-invalid={errors.amount ? true : undefined}
-                aria-describedby={errors.amount ? "payment-amount-error" : undefined}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                aria-invalid={amountError ? true : undefined}
+                aria-describedby={amountError ? "payment-amount-error" : undefined}
                 placeholder="0.00"
               />
-              {errors.amount ? (
+              {amountError ? (
                 <p id="payment-amount-error" className="text-sm text-destructive">
-                  {errors.amount}
+                  {amountError}
                 </p>
               ) : null}
             </div>
@@ -211,7 +268,7 @@ function RecordPaymentForm({
         <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={pending || !selected}>
+        <Button type="submit" disabled={pending || !selected || amountTooHigh}>
           {pending ? <Loader2 className="animate-spin" /> : null}
           {pending ? "Recording…" : "Record payment"}
         </Button>
@@ -236,6 +293,7 @@ export function RecordPaymentDialog({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [session, setSession] = useState(0);
 
   return (
     <>
@@ -249,7 +307,10 @@ export function RecordPaymentDialog({
             : undefined
         }
         aria-label={compact ? "Record payment" : undefined}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setSession((current) => current + 1);
+          setOpen(true);
+        }}
       >
         {compact ? <Banknote /> : null}
         {compact ? <span className="sr-only">{label}</span> : label}
@@ -263,8 +324,10 @@ export function RecordPaymentDialog({
         discardMessage="This payment has not been saved."
       >
         <RecordPaymentForm
+          key={session}
           invoices={invoices}
           presetId={presetId}
+          refreshOnOpen={!presetId}
           onSaved={(saved) => {
             setOpen(false);
             onSaved(saved);

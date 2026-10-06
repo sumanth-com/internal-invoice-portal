@@ -326,7 +326,7 @@ export function ChoiceSelect({
   id: string;
   value: string;
   onValue: (value: string) => void;
-  choices: readonly { value: string; label: string }[];
+  choices: readonly { value: string; label: string; lines?: readonly string[] }[];
   label: string;
   disabled?: boolean;
   invalid?: boolean;
@@ -422,14 +422,22 @@ export function ChoiceSelect({
               role="option"
               aria-selected={index === active}
               className={cn(
-                "flex w-full items-center justify-between gap-3 px-3 py-2 text-left",
+                "flex w-full px-3 py-2 text-left",
+                choice.lines ? "items-start" : "items-center justify-between gap-3",
                 index === active ? "bg-muted" : "hover:bg-muted/70",
               )}
               onMouseEnter={() => setActive(index)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(choice.value)}
             >
-              <span>{choice.label}</span>
+              <span className="min-w-0">
+                <span className="block">{choice.label}</span>
+                {choice.lines?.map((line, lineIndex) => (
+                  <span key={lineIndex} className="block text-xs text-muted-foreground">
+                    {line}
+                  </span>
+                ))}
+              </span>
               {display === "value" ? (
                 <span className="font-medium tabular-nums text-muted-foreground">{choice.value}</span>
               ) : null}

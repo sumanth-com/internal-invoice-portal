@@ -14,6 +14,7 @@ import {
   formatInvoiceDate,
   formatMoney,
   invoiceUsesLegacyGst,
+  roundMoney,
   statusLabel,
   type InvoiceDetail,
 } from "@/lib/invoice";
@@ -41,6 +42,9 @@ Font.registerHyphenationCallback((word) => [word]);
 
 const PURPLE = "#5B2BD6";
 const PURPLE_DEEP = "#3C1D9E";
+const PURPLE_SOFT = "#DDD6FE";
+const PAYMENT_TERMS =
+  "Payment due by the date stated. Quote the invoice number when paying. Please share the TDS certificate, if applicable.";
 const INK = "#1C1733";
 const BODY = "#3F3A4D";
 const MUTED = "#6B6578";
@@ -63,8 +67,16 @@ const s = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 6,
+    height: 5,
     backgroundColor: PURPLE,
+  },
+  barAccent: {
+    position: "absolute",
+    top: 5,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: PURPLE_SOFT,
   },
   watermark: {
     position: "absolute",
@@ -83,12 +95,35 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginTop: 8,
+    marginTop: 10,
+    gap: 16,
+  },
+  brand: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: PURPLE,
+    paddingLeft: 10,
   },
   logo: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     objectFit: "contain",
+  },
+  brandText: { flex: 1, paddingTop: 1 },
+  company: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: INK,
+    lineHeight: "14pt",
+  },
+  brandMeta: {
+    marginTop: 2,
+    fontSize: 8,
+    color: MUTED,
+    lineHeight: "11pt",
   },
   titleBlock: { alignItems: "flex-end", maxWidth: 250 },
   kicker: {
@@ -157,7 +192,6 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
   infoCell: {
-    width: "33.33%",
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderRightWidth: 1,
@@ -193,12 +227,13 @@ const s = StyleSheet.create({
     backgroundColor: WHITE,
   },
   rowAlt: { backgroundColor: "#FBFAFE" },
-  colIndex: { width: 24 },
-  colDescription: { flex: 1, paddingRight: 8, lineHeight: "12pt" },
-  colHsn: { width: 58 },
-  colQty: { width: 42, textAlign: "right" },
-  colRate: { width: 78, textAlign: "right" },
-  colAmount: { width: 86, textAlign: "right" },
+  colDescription: { flex: 1, paddingRight: 6, lineHeight: "12pt" },
+  colHsn: { width: 52 },
+  colQty: { width: 32, textAlign: "right" },
+  colUnit: { width: 36, textAlign: "right" },
+  colRate: { width: 64, textAlign: "right" },
+  colAmount: { width: 72, textAlign: "right" },
+  colGst: { width: 62, textAlign: "right" },
   strong: { color: INK, fontWeight: 600 },
   empty: { paddingVertical: 12, paddingHorizontal: 8, color: MUTED },
   lower: { flexDirection: "row", gap: 16, marginTop: 14 },
@@ -390,8 +425,7 @@ function PartyCard({ title, party }: { title: string; party: PartyBlock }) {
       <Text style={s.partyName}>{party.name || "—"}</Text>
       {party.trade ? <Text style={s.trade}>{party.trade}</Text> : null}
       <Field label="Address" value={party.address} />
-      <Field label="State" value={party.state} />
-      <Field label="State code" value={party.stateCode} />
+      <Field label="State" value={[party.state, party.stateCode].filter(Boolean).join(" · ") || null} />
       <Field label="GSTIN" value={party.gstin} />
       <Field label="PAN" value={party.pan} />
       <Field label="CIN" value={party.cin} />
@@ -400,9 +434,21 @@ function PartyCard({ title, party }: { title: string; party: PartyBlock }) {
   );
 }
 
-function InfoCell({ label, value, index }: { label: string; value: string; index: number }) {
+function InfoCell({
+  label,
+  value,
+  index,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  index: number;
+  wide?: boolean;
+}) {
+  const lastInRow = wide ? index === 4 : index % 3 === 2;
   const edge = {
-    borderRightWidth: index % 3 === 2 ? 0 : 1,
+    width: wide ? "50%" : "33.33%",
+    borderRightWidth: lastInRow ? 0 : 1,
     borderBottomWidth: index >= 3 ? 0 : 1,
   };
   return (
@@ -416,14 +462,30 @@ function InfoCell({ label, value, index }: { label: string; value: string; index
 function TableHead() {
   return (
     <View style={s.thead} fixed>
-      <Text style={s.colIndex}>#</Text>
       <Text style={s.colDescription}>Description</Text>
-      <Text style={s.colHsn}>SAC / HSN</Text>
+      <Text style={s.colHsn}>SAC/HSN</Text>
       <Text style={s.colQty}>Qty</Text>
+      <Text style={s.colUnit}>Unit</Text>
       <Text style={s.colRate}>Rate</Text>
-      <Text style={s.colAmount}>Taxable amount</Text>
+      <Text style={s.colAmount}>Taxable Amount</Text>
+      <Text style={s.colGst}>GST</Text>
     </View>
   );
+}
+
+function lineGstAmounts(invoice: InvoiceDetail) {
+  const totalGst = roundMoney(invoice.gstAmount);
+  if (!invoice.gstEnabled || invoice.subtotal <= 0 || totalGst <= 0) {
+    return invoice.items.map(() => 0);
+  }
+  const amounts = invoice.items.map((item) =>
+    roundMoney((item.lineSubtotal / invoice.subtotal) * totalGst),
+  );
+  const drift = roundMoney(totalGst - amounts.reduce((sum, value) => sum + value, 0));
+  if (amounts.length > 0 && drift !== 0) {
+    amounts[amounts.length - 1] = roundMoney(amounts[amounts.length - 1] + drift);
+  }
+  return amounts;
 }
 
 function TotalRow({ label, value }: { label: string; value: string }) {
@@ -470,7 +532,19 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
   const to = partyBlock(invoice.billTo, invoice.stateCode);
   const money = (value: number) => formatMoney(value, invoice.currency);
   const taxes = taxLines(invoice);
+  const lineGst = lineGstAmounts(invoice);
+  const headerContact = (from.contact ?? "").split("\n").filter(Boolean).join("  ·  ");
   const contact = [from.contact?.split("\n")[0], website].filter(Boolean).join("  ·  ");
+  const storedTerms = invoice.paymentTerms?.trim() ?? "";
+  const paymentTerms =
+    storedTerms && storedTerms !== PAYMENT_TERMS ? `${PAYMENT_TERMS}\n${storedTerms}` : PAYMENT_TERMS;
+  const summary = [
+    ["Client name", invoice.beneficiaryName || to.name || "—"],
+    ["Due date", invoice.dueDate ? formatInvoiceDate(invoice.dueDate) : "—"],
+    ["Place of supply", invoice.placeOfSupply || "—"],
+    ["Deal / brand reference", invoice.dealReference || "—"],
+    ["GSTIN", invoice.clientGstin || to.gstin || "—"],
+  ];
 
   return (
     <Document
@@ -483,6 +557,7 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
     >
       <Page size="A4" style={s.page}>
         <View style={s.bar} fixed />
+        <View style={s.barAccent} fixed />
         {invoice.status === "cancelled" ? (
           <Text style={s.watermark} fixed>
             CANCELLED
@@ -499,7 +574,14 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
         />
 
         <View style={s.header}>
-          {logo ? <Image src={logo} style={s.logo} /> : null}
+          <View style={s.brand}>
+            {logo ? <Image src={logo} style={s.logo} /> : null}
+            <View style={s.brandText}>
+              <Text style={s.company}>{from.name || "iFranchise Services Private Limited"}</Text>
+              {from.address ? <Text style={s.brandMeta}>{from.address}</Text> : null}
+              {headerContact ? <Text style={s.brandMeta}>{headerContact}</Text> : null}
+            </View>
+          </View>
           <View style={s.titleBlock}>
             <Text style={s.kicker}>{invoice.gstEnabled ? "TAX INVOICE" : "INVOICE"}</Text>
             <Text style={s.invoiceNo}>{invoice.invoiceNumber}</Text>
@@ -517,15 +599,11 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
         </View>
 
         <View style={s.info}>
-          {[
-            ["Invoice number", invoice.invoiceNumber],
-            ["Invoice date", formatInvoiceDate(invoice.invoiceDate)],
-            ["Due date", invoice.dueDate ? formatInvoiceDate(invoice.dueDate) : "—"],
-            ["Place of supply", invoice.placeOfSupply || "—"],
-            ["Deal / brand", invoice.dealReference || "—"],
-            ["Payment status", statusLabel(invoice.status)],
-          ].map(([label, value], index) => (
+          {summary.slice(0, 3).map(([label, value], index) => (
             <InfoCell key={label} label={label} value={value} index={index} />
+          ))}
+          {summary.slice(3).map(([label, value], index) => (
+            <InfoCell key={label} label={label} value={value} index={index + 3} wide />
           ))}
         </View>
 
@@ -536,12 +614,13 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
           ) : (
             invoice.items.map((item, index) => (
               <View key={item.id} style={index % 2 === 1 ? [s.row, s.rowAlt] : s.row} wrap={false}>
-                <Text style={s.colIndex}>{index + 1}</Text>
                 <Text style={[s.colDescription, s.strong]}>{item.description}</Text>
                 <Text style={s.colHsn}>{item.hsn || "—"}</Text>
                 <Text style={s.colQty}>{formatQuantity(item.quantity)}</Text>
+                <Text style={s.colUnit}>—</Text>
                 <Text style={s.colRate}>{money(item.rate)}</Text>
                 <Text style={[s.colAmount, s.strong]}>{money(item.lineSubtotal)}</Text>
+                <Text style={s.colGst}>{invoice.gstEnabled ? money(lineGst[index] ?? 0) : "—"}</Text>
               </View>
             ))
           )}
@@ -579,22 +658,16 @@ function InvoiceDocument({ invoice, logo, website }: InvoicePdfData) {
           </View>
         </View>
 
-        {invoice.paymentTerms || invoice.notes ? (
-          <View style={s.notes} wrap={false}>
-            {invoice.paymentTerms ? (
-              <>
-                <Text style={s.panelTitle}>Payment terms</Text>
-                <Text style={s.noteText}>{invoice.paymentTerms}</Text>
-              </>
-            ) : null}
-            {invoice.notes ? (
-              <>
-                <Text style={invoice.paymentTerms ? [s.panelTitle, { marginTop: 6 }] : s.panelTitle}>Notes</Text>
-                <Text style={s.noteText}>{invoice.notes}</Text>
-              </>
-            ) : null}
-          </View>
-        ) : null}
+        <View style={s.notes} wrap={false}>
+          <Text style={s.panelTitle}>Payment terms</Text>
+          <Text style={s.noteText}>{paymentTerms}</Text>
+          {invoice.notes ? (
+            <>
+              <Text style={[s.panelTitle, { marginTop: 6 }]}>Notes</Text>
+              <Text style={s.noteText}>{invoice.notes}</Text>
+            </>
+          ) : null}
+        </View>
       </Page>
     </Document>
   );

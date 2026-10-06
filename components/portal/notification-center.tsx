@@ -226,13 +226,12 @@ function NotificationSkeleton() {
   return (
     <div className="divide-y" role="status" aria-label="Loading notifications">
       {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="flex items-start gap-3 px-4 py-4">
+        <div key={index} className="flex items-start gap-2.5 px-3 py-3">
           <span className="mt-1 size-4 animate-pulse rounded-sm bg-muted" />
-          <span className="size-8 animate-pulse rounded-full bg-muted" />
+          <span className="mt-1 size-3.5 animate-pulse rounded-sm bg-muted" />
           <div className="min-w-0 flex-1 space-y-2">
             <span className="block h-4 w-2/3 animate-pulse rounded bg-muted" />
             <span className="block h-3 w-full animate-pulse rounded bg-muted" />
-            <span className="block h-3 w-24 animate-pulse rounded bg-muted" />
           </div>
         </div>
       ))}
@@ -282,57 +281,45 @@ function DetailPanel({
   const Icon = item ? icons[item.kind] : Bell;
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
       {item ? (
-        <div key={item.id} className="flex min-h-0 flex-1 flex-col transition-opacity duration-200">
-          <div className="flex items-start gap-3 border-b px-4 py-4 sm:px-6">
-            <Button type="button" variant="ghost" size="sm" className="lg:hidden" onClick={onBack}>
+        <div key={item.id} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center gap-3 border-b px-5 py-4 sm:px-8">
+            <Button type="button" variant="ghost" size="sm" className="-ml-2 lg:hidden" onClick={onBack}>
               <ArrowLeft className="size-4" />
               Back
             </Button>
-            <span
-              className={cn(
-                "mt-0.5 hidden size-10 shrink-0 items-center justify-center rounded-full border sm:flex",
-                item.read ? "text-muted-foreground" : "border-primary/30 bg-primary/10 text-primary",
-              )}
-            >
-              <Icon className="size-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notification</p>
-              <h2 className="mt-1 text-base font-semibold leading-snug">{item.title}</h2>
-            </div>
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <h2 className="min-w-0 flex-1 text-base font-semibold leading-snug">{item.title}</h2>
           </div>
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-6">
-            <p className="text-sm leading-6 text-muted-foreground">{item.message}</p>
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <DetailField label="Status" value={item.read ? "Read" : "Unread"} accent={!item.read} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+            <p className="max-w-2xl text-sm leading-6">{item.message}</p>
+            <dl className="mt-8 max-w-lg divide-y border-y">
+              <DetailField label="Status" value={item.read ? "Read" : "Unread"} />
               <DetailField label="Type" value={kindLabel[item.kind]} />
               <DetailField label="When" value={formatNotificationTime(item.createdAt)} />
               {item.subject ? <DetailField label={subjectLabel(item.kind)} value={item.subject} /> : null}
             </dl>
           </div>
-          <div className="flex flex-wrap justify-end gap-2 border-t px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap justify-end gap-1 border-t px-5 py-3 sm:px-8">
             {item.read ? (
-              <Button type="button" variant="outline" size="sm" onClick={onUnread}>
+              <Button type="button" variant="ghost" size="sm" onClick={onUnread}>
                 Mark as unread
               </Button>
             ) : (
-              <Button type="button" variant="outline" size="sm" onClick={onRead}>
+              <Button type="button" variant="ghost" size="sm" onClick={onRead}>
                 Mark as read
               </Button>
             )}
-            <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={onDelete}>
+            <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onDelete}>
               Delete
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex min-h-64 flex-1 flex-col items-center justify-center px-6 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full border border-dashed text-muted-foreground">
-            <Bell className="size-5" />
-          </span>
-          <p className="mt-4 text-sm font-medium">Select a notification</p>
+          <Bell className="size-4 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium">Select a notification</p>
           <p className="mt-1 max-w-xs text-sm text-muted-foreground">
             Choose a notification from the list to view its details.
           </p>
@@ -342,11 +329,11 @@ function DetailPanel({
   );
 }
 
-function DetailField({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function DetailField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border bg-background px-3 py-2">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={cn("mt-1 text-sm font-medium", accent && "text-primary")}>{value}</dd>
+    <div className="flex items-baseline justify-between gap-6 py-2.5">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-right text-sm">{value}</dd>
     </div>
   );
 }
@@ -449,7 +436,7 @@ export function NotificationCenter() {
           description="Updates for issued, paid, cancelled, and draft invoices, beneficiaries, emails, and invitations."
         />
       </div>
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm lg:flex-row">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card lg:flex-row">
         {status === "error" ? (
           <NotificationError onRetry={() => void reload()} />
         ) : status === "loading" ? (
@@ -457,26 +444,24 @@ export function NotificationCenter() {
         ) : (
           <>
             <div className={cn("flex min-h-0 w-full flex-col lg:max-w-[26rem] lg:border-r", mobileDetail && "hidden lg:flex")}>
-              <div className="flex shrink-0 flex-col gap-3 border-b px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Checkbox
-                    id={selectAllId}
-                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                    disabled={items.length === 0}
-                    onCheckedChange={toggleAll}
-                    aria-label="Select all notifications"
-                  />
-                  <label htmlFor={selectAllId} className="text-sm">
-                    Select all
-                  </label>
-                  {selectedItems.length > 0 ? (
-                    <span className="text-sm text-muted-foreground">{selectedItems.length} selected</span>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+                <Checkbox
+                  id={selectAllId}
+                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                  disabled={items.length === 0}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all notifications"
+                />
+                <label htmlFor={selectAllId} className="text-sm text-muted-foreground">
+                  Select all
+                </label>
+                {selectedItems.length > 0 ? (
+                  <span className="text-sm text-muted-foreground">{selectedItems.length} selected</span>
+                ) : null}
+                <div className="ml-auto flex flex-wrap items-center gap-1">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     disabled={selectedItems.length === 0}
@@ -487,9 +472,8 @@ export function NotificationCenter() {
                   </Button>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="sm:ml-auto"
                     disabled={items.length === 0 || unreadCount === 0}
                     onClick={markEverythingRead}
                   >
@@ -510,8 +494,8 @@ export function NotificationCenter() {
                           role="button"
                           tabIndex={0}
                           className={cn(
-                            "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-muted/60",
-                            active && "bg-primary/5",
+                            "flex w-full items-start gap-2.5 px-3 py-3 text-left transition-colors hover:bg-muted/40",
+                            active && "bg-muted/60",
                           )}
                           onClick={() => {
                             if (ignoreRowClick.current) {
@@ -527,30 +511,29 @@ export function NotificationCenter() {
                             }
                           }}
                         >
-                          <span className="mt-1" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                          <span className="mt-0.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                             <Checkbox
                               checked={selected.has(item.id)}
                               onCheckedChange={(checked) => toggleOne(item.id, checked)}
                               aria-label={`Select ${item.title}`}
                             />
                           </span>
-                          <span
-                            className={cn(
-                              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border",
-                              item.read ? "text-muted-foreground" : "border-primary/30 bg-primary/10 text-primary",
-                            )}
-                          >
-                            <Icon className="size-4" />
-                          </span>
+                          <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1">
                             <span className="flex items-start gap-2">
-                              <span className={cn("min-w-0 flex-1 text-sm leading-5", item.read ? "font-medium" : "font-semibold")}>
+                              {!item.read ? (
+                                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+                              ) : (
+                                <span className="mt-1.5 size-1.5 shrink-0" aria-hidden />
+                              )}
+                              <span className={cn("min-w-0 flex-1 truncate text-sm leading-5", item.read ? "text-foreground/80" : "font-semibold")}>
                                 {item.title}
                               </span>
-                              {!item.read ? <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" /> : null}
+                              <span className="shrink-0 pt-0.5 text-xs text-muted-foreground">
+                                {formatNotificationTime(item.createdAt)}
+                              </span>
                             </span>
-                            <span className="mt-1 line-clamp-2 block text-sm text-muted-foreground">{item.message}</span>
-                            <span className="mt-1 block text-xs text-muted-foreground">{formatNotificationTime(item.createdAt)}</span>
+                            <span className="mt-0.5 line-clamp-1 block pl-3.5 text-sm text-muted-foreground">{item.message}</span>
                           </span>
                           <NotificationMenu
                             item={item}
