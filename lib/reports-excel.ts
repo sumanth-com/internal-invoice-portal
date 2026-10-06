@@ -1,31 +1,119 @@
 import "server-only";
 
 import { roundMoney, statusLabel } from "@/lib/invoice";
-import { REPORT_TYPE_LABELS, reportBeneficiaryRows, type ReportInvoice, type ReportType, type ReportView } from "@/lib/reports";
+import { reportBeneficiaryRows, type ReportInvoice, type ReportType, type ReportView } from "@/lib/reports";
 import ExcelJS from "exceljs";
 
-const MONEY = "#,##0.00";
 const DATE = "dd mmm yyyy";
+
+type Align = "left" | "right";
+type Kind = "text" | "date" | "money" | "number";
+
+type ColumnSpec = {
+  header: string;
+  key: string;
+  width: number;
+  align: Align;
+  kind: Kind;
+};
 
 function dateValue(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return new Date(`${value}T00:00:00+05:30`);
 }
 
-function sum(invoices: ReportInvoice[], pick: (invoice: ReportInvoice) => number) {
-  return roundMoney(invoices.reduce((total, invoice) => total + pick(invoice), 0));
+function moneyFormat(currency: string) {
+  return currency === "INR" ? '"₹"#,##,##0.00' : `"${currency} "#,##0.00`;
 }
 
-function styleHeader(sheet: ExcelJS.Worksheet) {
-  const header = sheet.getRow(1);
-  header.font = { bold: true };
-  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
-  header.alignment = { vertical: "middle" };
+function orderedInvoices(invoices: ReportInvoice[]) {
+  return [...invoices].sort((left, right) => {
+    if (left.date !== right.date) return left.date < right.date ? 1 : -1;
+    return left.number < right.number ? 1 : -1;
+  });
+}
+
+const INVOICE_COLUMNS: ColumnSpec[] = [
+  { header: "Invoice", key: "number", width: 18, align: "left", kind: "text" },
+  { header: "Date", key: "date", width: 16, align: "left", kind: "date" },
+  { header: "Beneficiary", key: "beneficiary", width: 28, align: "left", kind: "text" },
+  { header: "Status", key: "status", width: 14, align: "left", kind: "text" },
+  { header: "Subtotal", key: "subtotal", width: 16, align: "right", kind: "money" },
+  { header: "CGST", key: "cgst", width: 14, align: "right", kind: "money" },
+  { header: "SGST", key: "sgst", width: 14, align: "right", kind: "money" },
+  { header: "IGST", key: "igst", width: 14, align: "right", kind: "money" },
+  { header: "Total GST", key: "gst", width: 16, align: "right", kind: "money" },
+  { header: "TDS", key: "tds", width: 14, align: "right", kind: "money" },
+  { header: "Amount Paid", key: "paid", width: 16, align: "right", kind: "money" },
+  { header: "Balance Due", key: "balanceDue", width: 16, align: "right", kind: "money" },
+  { header: "Outstanding", key: "outstanding", width: 16, align: "right", kind: "money" },
+  { header: "Total", key: "total", width: 16, align: "right", kind: "money" },
+];
+
+function invoiceRow(invoice: ReportInvoice) {
+  return {
+    number: invoice.number,
+    date: dateValue(invoice.date),
+    beneficiary: invoice.beneficiaryName,
+    status: statusLabel(invoice.status),
+    subtotal: roundMoney(invoice.subtotal),
+    cgst: roundMoney(invoice.cgstAmount),
+    sgst: roundMoney(invoice.sgstAmount),
+    igst: roundMoney(invoice.igstAmount),
+    gst: roundMoney(invoice.gstAmount),
+    tds: roundMoney(invoice.tdsAmount),
+    paid: roundMoney(invoice.amountPaid),
+    balanceDue: roundMoney(invoice.balanceDue),
+    outstanding: roundMoney(invoice.outstanding),
+    total: roundMoney(invoice.total),
+  };
+}
+
+function writeTable(
+  workbook: ExcelJS.Workbook,
+  name: string,
+  columns: ColumnSpec[],
+  rows: Record<string, string | number | Date>[],
+  currency: string,
+) {
+  const sheet = workbook.addWorksheet(name, {
+    views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  sheet.columns = columns.map((column) => ({
+    key: column.key,
+    width: column.width,
+  }));
+
+  const header = sheet.addRow(Object.fromEntries(columns.map((column) => [column.key, column.header])));
   header.height = 22;
-}
+  header.eachCell((cell, index) => {
+    const column = columns[index - 1];
+    cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF0F172A" } };
+    cell.alignment = { horizontal: column?.align ?? "left", vertical: "middle" };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+    cell.border = { bottom: { style: "thin", color: { argb: "FF0F172A" } } };
+  });
 
-function paintMoney(row: ExcelJS.Row, columns: number[]) {
-  for (const column of columns) row.getCell(column).numFmt = MONEY;
+  const format = moneyFormat(currency);
+  for (const values of rows) {
+    const row = sheet.addRow(values);
+    row.height = 18;
+    columns.forEach((column, index) => {
+      const cell = row.getCell(index + 1);
+      cell.font = { name: "Calibri", size: 11, color: { argb: "FF0F172A" } };
+      cell.alignment = { horizontal: column.align, vertical: "middle" };
+      if (column.kind === "money") cell.numFmt = format;
+      if (column.kind === "date" && cell.value instanceof Date) cell.numFmt = DATE;
+      cell.border = { bottom: { style: "thin", color: { argb: "FFE2E8F0" } } };
+    });
+  }
+
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: columns.length },
+  };
+  sheet.views = [{ state: "frozen", ySplit: 1, showGridLines: false }];
 }
 
 export async function reportWorkbook(input: {
@@ -39,118 +127,24 @@ export async function reportWorkbook(input: {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "iFranchise";
   workbook.created = new Date();
-
-  const summary = workbook.addWorksheet("Summary");
-  summary.columns = [
-    { header: "Field", key: "field", width: 32 },
-    { header: "Value", key: "value", width: 42 },
-  ];
-  const summaryRows: { field: string; value: string | number | Date }[] = [
-    { field: "Report", value: "iFranchise report" },
-    { field: "Report type", value: REPORT_TYPE_LABELS[input.type] },
-    { field: "From", value: dateValue(input.view.from) },
-    { field: "To", value: dateValue(input.view.to) },
-    { field: "Search", value: input.query || "—" },
-    { field: "Beneficiary", value: input.beneficiary || "All beneficiaries" },
-    { field: "Generated", value: input.generatedAt },
-    { field: "Currency", value: input.view.currency },
-    { field: "Total invoices", value: input.invoices.length },
-    { field: "Invoice value", value: sum(input.invoices, (invoice) => invoice.total) },
-    { field: "CGST", value: sum(input.invoices, (invoice) => invoice.cgstAmount) },
-    { field: "SGST", value: sum(input.invoices, (invoice) => invoice.sgstAmount) },
-    { field: "IGST", value: sum(input.invoices, (invoice) => invoice.igstAmount) },
-    { field: "Total GST", value: sum(input.invoices, (invoice) => invoice.gstAmount) },
-    { field: "TDS", value: sum(input.invoices, (invoice) => invoice.tdsAmount) },
-    { field: "Balance due", value: sum(input.invoices, (invoice) => invoice.balanceDue) },
-    { field: "Amount paid", value: sum(input.invoices, (invoice) => invoice.amountPaid) },
-    { field: "Outstanding", value: sum(input.invoices, (invoice) => invoice.outstanding) },
-  ];
-  for (const status of input.view.statuses) {
-    summaryRows.push({ field: `${status.label} invoices`, value: status.count });
-  }
-  for (const mode of input.view.payments.modes) {
-    summaryRows.push({ field: `${mode.label} payments`, value: mode.count });
-  }
-  for (const entry of summaryRows) summary.addRow(entry);
-  styleHeader(summary);
-  summary.eachRow((row, index) => {
-    if (index === 1) return;
-    const cell = row.getCell(2);
-    if (cell.value instanceof Date) cell.numFmt = DATE;
-    const label = String(row.getCell(1).value ?? "");
-    if (
-      ["Invoice value", "CGST", "SGST", "IGST", "Total GST", "TDS", "Balance due", "Amount paid", "Outstanding"].includes(
-        label,
-      )
-    ) {
-      cell.numFmt = MONEY;
-    }
-  });
+  const currency = input.view.currency || "INR";
 
   if (input.type === "beneficiaries") {
-    const details = workbook.addWorksheet("Beneficiaries");
-    details.columns = [
-      { header: "Beneficiary", key: "name", width: 36 },
-      { header: "Invoices", key: "count", width: 14 },
-      { header: "Value", key: "value", width: 18 },
+    const columns: ColumnSpec[] = [
+      { header: "Beneficiary", key: "name", width: 36, align: "left", kind: "text" },
+      { header: "Invoices", key: "count", width: 14, align: "right", kind: "number" },
+      { header: "Value", key: "value", width: 18, align: "right", kind: "money" },
     ];
-    for (const row of reportBeneficiaryRows(input.invoices)) {
-      const entry = details.addRow({ name: row.name, count: row.count, value: roundMoney(row.value) });
-      entry.getCell(3).numFmt = MONEY;
-    }
-    styleHeader(details);
-    details.views = [{ state: "frozen", ySplit: 1 }];
-    details.autoFilter = { from: "A1", to: "C1" };
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
+    const rows = reportBeneficiaryRows(input.invoices).map((row) => ({
+      name: row.name,
+      count: row.count,
+      value: roundMoney(row.value),
+    }));
+    writeTable(workbook, "Beneficiaries", columns, rows, currency);
+  } else {
+    const rows = orderedInvoices(input.invoices).map((invoice) => invoiceRow(invoice));
+    writeTable(workbook, "Invoices", INVOICE_COLUMNS, rows, currency);
   }
-
-  const details = workbook.addWorksheet("Invoices");
-  details.columns = [
-    { header: "Invoice number", key: "number", width: 20 },
-    { header: "Invoice date", key: "date", width: 16 },
-    { header: "Beneficiary", key: "beneficiary", width: 32 },
-    { header: "Status", key: "status", width: 14 },
-    { header: "Subtotal", key: "subtotal", width: 16 },
-    { header: "CGST", key: "cgst", width: 14 },
-    { header: "SGST", key: "sgst", width: 14 },
-    { header: "IGST", key: "igst", width: 14 },
-    { header: "Total GST", key: "gst", width: 16 },
-    { header: "Invoice total", key: "total", width: 16 },
-    { header: "TDS", key: "tds", width: 14 },
-    { header: "Balance due", key: "balanceDue", width: 16 },
-    { header: "Amount paid", key: "paid", width: 16 },
-    { header: "Outstanding", key: "outstanding", width: 16 },
-    { header: "Payment dates", key: "payments", width: 28 },
-  ];
-  const ordered = [...input.invoices].sort((left, right) => {
-    if (left.date !== right.date) return left.date < right.date ? -1 : 1;
-    return left.number < right.number ? -1 : 1;
-  });
-  for (const invoice of ordered) {
-    const row = details.addRow({
-      number: invoice.number,
-      date: dateValue(invoice.date),
-      beneficiary: invoice.beneficiaryName,
-      status: statusLabel(invoice.status),
-      subtotal: roundMoney(invoice.subtotal),
-      cgst: roundMoney(invoice.cgstAmount),
-      sgst: roundMoney(invoice.sgstAmount),
-      igst: roundMoney(invoice.igstAmount),
-      gst: roundMoney(invoice.gstAmount),
-      total: roundMoney(invoice.total),
-      tds: roundMoney(invoice.tdsAmount),
-      balanceDue: roundMoney(invoice.balanceDue),
-      paid: roundMoney(invoice.amountPaid),
-      outstanding: roundMoney(invoice.outstanding),
-      payments: [...new Set(invoice.payments.map((payment) => payment.date).filter(Boolean))].sort().join(", "),
-    });
-    if (row.getCell(2).value instanceof Date) row.getCell(2).numFmt = DATE;
-    paintMoney(row, [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-  }
-  styleHeader(details);
-  details.views = [{ state: "frozen", ySplit: 1 }];
-  details.autoFilter = { from: "A1", to: "O1" };
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

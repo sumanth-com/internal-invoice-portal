@@ -12,7 +12,8 @@ import {
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { formatInvoiceDate, roundMoney, statusLabel } from "@/lib/invoice";
+import { formatInvoiceDate, formatMoney, roundMoney, statusLabel } from "@/lib/invoice";
+import { paymentModeLabel } from "@/lib/payment";
 import {
   REPORT_TYPE_LABELS,
   reportBeneficiaryRows,
@@ -34,64 +35,228 @@ Font.register({
 });
 Font.registerHyphenationCallback((word) => [word]);
 
-const INK = "#0f172a";
-const MUTED = "#64748b";
-const RULE = "#e2e8f0";
-const TINT = "#f8fafc";
+const INK = "#0F172A";
+const MUTED = "#64748B";
+const RULE = "#E2E8F0";
+const HAIRLINE = "#EEF2F6";
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Inter",
     fontSize: 8,
     color: INK,
-    paddingTop: 32,
-    paddingBottom: 48,
-    paddingHorizontal: 32,
+    paddingTop: 28,
+    paddingBottom: 40,
+    paddingHorizontal: 28,
   },
-  accent: { position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: INK },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
   brand: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logo: { width: 29, height: 28, objectFit: "contain" },
-  title: { fontSize: 16, fontWeight: 700 },
-  meta: { marginTop: 2, color: MUTED },
-  summary: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
-  figure: { width: "23%", borderWidth: 1, borderColor: RULE, borderRadius: 4, padding: 8, backgroundColor: TINT },
-  figureLabel: { color: MUTED, marginBottom: 3 },
-  figureValue: { fontSize: 11, fontWeight: 600 },
-  tableHead: { flexDirection: "row", backgroundColor: TINT, borderTopWidth: 1, borderBottomWidth: 1, borderColor: RULE },
-  row: { flexDirection: "row", borderBottomWidth: 1, borderColor: RULE },
-  cell: { paddingVertical: 4, paddingHorizontal: 4 },
-  headText: { fontWeight: 600, color: MUTED },
+  logo: { width: 28, height: 28, objectFit: "contain" },
+  title: { fontSize: 14, fontWeight: 700, color: INK },
+  reportType: { marginTop: 1, fontSize: 8, color: MUTED },
+  meta: { alignItems: "flex-end" },
+  metaLine: { flexDirection: "row", justifyContent: "flex-end", marginTop: 1 },
+  metaLabel: { width: 58, textAlign: "right", color: MUTED, fontSize: 8 },
+  metaValue: { width: 118, textAlign: "right", color: INK, fontSize: 8, fontWeight: 500 },
+  filters: { marginTop: 8, color: MUTED, fontSize: 8 },
+  summary: {
+    flexDirection: "row",
+    marginTop: 12,
+    marginBottom: 12,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: RULE,
+  },
+  summaryItem: { flex: 1, paddingRight: 8 },
+  summaryLabel: { fontSize: 7, color: MUTED, marginBottom: 2 },
+  summaryValue: { fontSize: 9, fontWeight: 600, color: INK },
+  tableHead: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: INK,
+    paddingBottom: 4,
+  },
+  row: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    alignItems: "flex-start",
+  },
+  cell: { paddingVertical: 5, paddingRight: 6 },
+  headText: { fontSize: 7.5, fontWeight: 600, color: INK },
   right: { textAlign: "right" },
+  empty: { marginTop: 12, color: MUTED },
   footer: {
     position: "absolute",
-    bottom: 20,
-    left: 32,
-    right: 32,
+    bottom: 16,
+    left: 28,
+    right: 28,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: RULE,
     flexDirection: "row",
     justifyContent: "space-between",
     color: MUTED,
-    fontSize: 8,
+    fontSize: 7.5,
   },
 });
 
-const columns = [
-  { label: "Invoice", width: "16%" },
-  { label: "Date", width: "12%" },
-  { label: "Beneficiary", width: "22%" },
-  { label: "Status", width: "12%" },
-  { label: "Subtotal", width: "12%", right: true },
-  { label: "GST", width: "10%", right: true },
-  { label: "Total", width: "12%", right: true },
-  { label: "Outstanding", width: "14%", right: true },
-];
+type Column = {
+  label: string;
+  width: string;
+  align: "left" | "right";
+  text: (invoice: ReportInvoice) => string;
+};
 
 function money(amount: number, currency: string) {
-  return `${currency} ${roundMoney(amount).toFixed(2)}`;
+  return formatMoney(roundMoney(amount), currency || "INR");
 }
 
 function sum(invoices: ReportInvoice[], pick: (invoice: ReportInvoice) => number) {
   return roundMoney(invoices.reduce((total, invoice) => total + pick(invoice), 0));
+}
+
+function orderedInvoices(invoices: ReportInvoice[]) {
+  return [...invoices].sort((left, right) => {
+    if (left.date !== right.date) return left.date < right.date ? 1 : -1;
+    return left.number < right.number ? 1 : -1;
+  });
+}
+
+function paymentModes(invoice: ReportInvoice) {
+  const labels = [...new Set(invoice.payments.map((payment) => paymentModeLabel(payment.mode)))];
+  return labels.length > 0 ? labels.join(", ") : "—";
+}
+
+function reportColumns(type: ReportType): Column[] {
+  const taxSplit = type === "gst";
+  const showMode = type === "payments";
+  const showOutstanding = type === "outstanding" || type === "payments";
+  const width = taxSplit
+    ? {
+        invoice: "10%",
+        date: "8%",
+        beneficiary: "11%",
+        status: "7%",
+        subtotal: "7.5%",
+        gst: "8%",
+        tds: "6%",
+        paid: "8%",
+        balance: "8%",
+        total: "7%",
+      }
+    : showMode
+      ? {
+          invoice: "11%",
+          date: "8%",
+          beneficiary: "12%",
+          status: "7%",
+          subtotal: "8%",
+          gst: "8%",
+          tds: "6%",
+          paid: "8%",
+          balance: "8%",
+          total: "8%",
+        }
+      : showOutstanding
+        ? {
+            invoice: "12%",
+            date: "9%",
+            beneficiary: "14%",
+            status: "8%",
+            subtotal: "8%",
+            gst: "8%",
+            tds: "6%",
+            paid: "8%",
+            balance: "8%",
+            total: "8%",
+          }
+        : {
+            invoice: "13%",
+            date: "11%",
+            beneficiary: "16%",
+            status: "8%",
+            subtotal: "10%",
+            gst: "10%",
+            tds: "7%",
+            paid: "9%",
+            balance: "9%",
+            total: "7%",
+          };
+  const columns: Column[] = [
+    { label: "Invoice", width: width.invoice, align: "left", text: (invoice) => invoice.number },
+    { label: "Date", width: width.date, align: "left", text: (invoice) => formatInvoiceDate(invoice.date) },
+    { label: "Beneficiary", width: width.beneficiary, align: "left", text: (invoice) => invoice.beneficiaryName },
+    { label: "Status", width: width.status, align: "left", text: (invoice) => statusLabel(invoice.status) },
+  ];
+  if (showMode) columns.push({ label: "Mode", width: "8%", align: "left", text: paymentModes });
+  columns.push({
+    label: "Subtotal",
+    width: width.subtotal,
+    align: "right",
+    text: (invoice) => money(invoice.subtotal, invoice.currency),
+  });
+  if (taxSplit) {
+    columns.push(
+      { label: "CGST", width: "6.5%", align: "right", text: (invoice) => money(invoice.cgstAmount, invoice.currency) },
+      { label: "SGST", width: "6.5%", align: "right", text: (invoice) => money(invoice.sgstAmount, invoice.currency) },
+      { label: "IGST", width: "6.5%", align: "right", text: (invoice) => money(invoice.igstAmount, invoice.currency) },
+    );
+  }
+  columns.push(
+    { label: "Total GST", width: width.gst, align: "right", text: (invoice) => money(invoice.gstAmount, invoice.currency) },
+    { label: "TDS", width: width.tds, align: "right", text: (invoice) => money(invoice.tdsAmount, invoice.currency) },
+    { label: "Amount Paid", width: width.paid, align: "right", text: (invoice) => money(invoice.amountPaid, invoice.currency) },
+    { label: "Balance Due", width: width.balance, align: "right", text: (invoice) => money(invoice.balanceDue, invoice.currency) },
+  );
+  if (showOutstanding) {
+    columns.push({
+      label: "Outstanding",
+      width: showMode ? "8%" : "11%",
+      align: "right",
+      text: (invoice) => money(invoice.outstanding, invoice.currency),
+    });
+  }
+  columns.push({ label: "Total", width: width.total, align: "right", text: (invoice) => money(invoice.total, invoice.currency) });
+  return columns;
+}
+
+function MetaLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metaLine}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue}>{value}</Text>
+    </View>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.summaryItem}>
+      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={styles.summaryValue}>{value}</Text>
+    </View>
+  );
+}
+
+function Cell({ column, value, header = false }: { column: Column; value: string; header?: boolean }) {
+  return (
+    <Text
+      style={[
+        styles.cell,
+        header ? styles.headText : {},
+        { width: column.width },
+        column.align === "right" ? styles.right : {},
+      ]}
+    >
+      {value}
+    </Text>
+  );
 }
 
 function ReportDocument({
@@ -111,27 +276,33 @@ function ReportDocument({
   generatedAt: string;
   logo: Buffer | null;
 }) {
-  const ordered = [...invoices].sort((left, right) => {
-    if (left.date !== right.date) return left.date < right.date ? -1 : 1;
-    return left.number < right.number ? -1 : 1;
-  });
-  const figures = [
-    { label: "Invoices", value: String(invoices.length) },
-    { label: "Invoice value", value: money(sum(invoices, (invoice) => invoice.total), view.currency) },
-    { label: "CGST", value: money(sum(invoices, (invoice) => invoice.cgstAmount), view.currency) },
-    { label: "SGST", value: money(sum(invoices, (invoice) => invoice.sgstAmount), view.currency) },
-    { label: "IGST", value: money(sum(invoices, (invoice) => invoice.igstAmount), view.currency) },
-    { label: "Total GST", value: money(sum(invoices, (invoice) => invoice.gstAmount), view.currency) },
-    { label: "TDS", value: money(sum(invoices, (invoice) => invoice.tdsAmount), view.currency) },
-    { label: "Balance due", value: money(sum(invoices, (invoice) => invoice.balanceDue), view.currency) },
-    { label: "Amount paid", value: money(sum(invoices, (invoice) => invoice.amountPaid), view.currency) },
-    { label: "Outstanding", value: money(sum(invoices, (invoice) => invoice.outstanding), view.currency) },
-  ];
+  const currency = view.currency || "INR";
+  const ordered = orderedInvoices(invoices);
+  const columns = reportColumns(type);
+  const filters = [
+    beneficiary ? `Beneficiary  ${beneficiary}` : "",
+    query ? `Search  ${query}` : "",
+  ].filter(Boolean);
+  const figures =
+    type === "beneficiaries"
+      ? [
+          { label: "Beneficiaries", value: String(reportBeneficiaryRows(invoices).length) },
+          { label: "Invoices", value: String(invoices.length) },
+          { label: "Total", value: money(sum(invoices, (invoice) => invoice.total), currency) },
+        ]
+      : [
+          { label: "Invoices", value: String(invoices.length) },
+          { label: "Subtotal", value: money(sum(invoices, (invoice) => invoice.subtotal), currency) },
+          { label: "Total GST", value: money(sum(invoices, (invoice) => invoice.gstAmount), currency) },
+          { label: "TDS", value: money(sum(invoices, (invoice) => invoice.tdsAmount), currency) },
+          { label: "Amount Paid", value: money(sum(invoices, (invoice) => invoice.amountPaid), currency) },
+          { label: "Balance Due", value: money(sum(invoices, (invoice) => invoice.balanceDue), currency) },
+          { label: "Total", value: money(sum(invoices, (invoice) => invoice.total), currency) },
+        ];
 
   return (
-    <Document title={`${REPORT_TYPE_LABELS[type]} ${view.from} to ${view.to}`}>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.accent} fixed />
+    <Document title={`${REPORT_TYPE_LABELS[type]} ${view.from} to ${view.to}`} author="iFranchise">
+      <Page size="A4" orientation="landscape" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.brand}>
             {logo ? (
@@ -139,24 +310,20 @@ function ReportDocument({
               <Image src={{ data: logo, format: "png" }} style={styles.logo} />
             ) : null}
             <View>
-              <Text style={styles.title}>iFranchise report</Text>
-              <Text style={styles.meta}>{REPORT_TYPE_LABELS[type]}</Text>
+              <Text style={styles.title}>iFranchise</Text>
+              <Text style={styles.reportType}>{REPORT_TYPE_LABELS[type]}</Text>
             </View>
           </View>
-          <View>
-            <Text style={styles.meta}>From {formatInvoiceDate(view.from)}</Text>
-            <Text style={styles.meta}>To {formatInvoiceDate(view.to)}</Text>
-            <Text style={styles.meta}>Generated {generatedAt}</Text>
-            {query ? <Text style={styles.meta}>Search: {query}</Text> : null}
-            {beneficiary ? <Text style={styles.meta}>Beneficiary: {beneficiary}</Text> : null}
+          <View style={styles.meta}>
+            <MetaLine label="From" value={formatInvoiceDate(view.from)} />
+            <MetaLine label="To" value={formatInvoiceDate(view.to)} />
+            <MetaLine label="Generated" value={generatedAt} />
           </View>
         </View>
+        {filters.length > 0 ? <Text style={styles.filters}>{filters.join("     ")}</Text> : null}
         <View style={styles.summary}>
           {figures.map((figure) => (
-            <View key={figure.label} style={styles.figure}>
-              <Text style={styles.figureLabel}>{figure.label}</Text>
-              <Text style={styles.figureValue}>{figure.value}</Text>
-            </View>
+            <SummaryItem key={figure.label} label={figure.label} value={figure.value} />
           ))}
         </View>
         {type === "beneficiaries" ? (
@@ -165,37 +332,25 @@ function ReportDocument({
           <>
             <View style={styles.tableHead} fixed>
               {columns.map((column) => (
-                <Text
-                  key={column.label}
-                  style={[styles.cell, styles.headText, { width: column.width }, column.right ? styles.right : {}]}
-                >
-                  {column.label}
-                </Text>
+                <Cell key={column.label} column={column} value={column.label} header />
               ))}
             </View>
             {ordered.length === 0 ? (
-              <Text style={{ marginTop: 12, color: MUTED }}>No rows match this report.</Text>
+              <Text style={styles.empty}>No rows match this report.</Text>
             ) : (
               ordered.map((invoice) => (
                 <View key={invoice.id} style={styles.row} wrap={false}>
-                  <Text style={[styles.cell, { width: "16%" }]}>{invoice.number}</Text>
-                  <Text style={[styles.cell, { width: "12%" }]}>{formatInvoiceDate(invoice.date)}</Text>
-                  <Text style={[styles.cell, { width: "22%" }]}>{invoice.beneficiaryName}</Text>
-                  <Text style={[styles.cell, { width: "12%" }]}>{statusLabel(invoice.status)}</Text>
-                  <Text style={[styles.cell, styles.right, { width: "12%" }]}>{roundMoney(invoice.subtotal).toFixed(2)}</Text>
-                  <Text style={[styles.cell, styles.right, { width: "10%" }]}>{roundMoney(invoice.gstAmount).toFixed(2)}</Text>
-                  <Text style={[styles.cell, styles.right, { width: "12%" }]}>{roundMoney(invoice.total).toFixed(2)}</Text>
-                  <Text style={[styles.cell, styles.right, { width: "14%" }]}>{roundMoney(invoice.outstanding).toFixed(2)}</Text>
+                  {columns.map((column) => (
+                    <Cell key={column.label} column={column} value={column.text(invoice)} />
+                  ))}
                 </View>
               ))
             )}
           </>
         )}
         <View style={styles.footer} fixed>
-          <Text>iFranchise internal invoice portal</Text>
-          <Text
-            render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-          />
+          <Text>{`iFranchise  ·  ${REPORT_TYPE_LABELS[type]}  ·  ${formatInvoiceDate(view.from)} – ${formatInvoiceDate(view.to)}`}</Text>
+          <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>
     </Document>
@@ -205,9 +360,9 @@ function ReportDocument({
 function BeneficiaryTable({ invoices }: { invoices: ReportInvoice[] }) {
   const rows = reportBeneficiaryRows(invoices);
   const head = [
-    { label: "Beneficiary", width: "56%" },
-    { label: "Invoices", width: "18%", right: true },
-    { label: "Value", width: "26%", right: true },
+    { label: "Beneficiary", width: "58%", align: "left" as const },
+    { label: "Invoices", width: "16%", align: "right" as const },
+    { label: "Value", width: "26%", align: "right" as const },
   ];
   return (
     <>
@@ -215,19 +370,19 @@ function BeneficiaryTable({ invoices }: { invoices: ReportInvoice[] }) {
         {head.map((column) => (
           <Text
             key={column.label}
-            style={[styles.cell, styles.headText, { width: column.width }, column.right ? styles.right : {}]}
+            style={[styles.cell, styles.headText, { width: column.width }, column.align === "right" ? styles.right : {}]}
           >
             {column.label}
           </Text>
         ))}
       </View>
       {rows.length === 0 ? (
-        <Text style={{ marginTop: 12, color: MUTED }}>No rows match this report.</Text>
+        <Text style={styles.empty}>No rows match this report.</Text>
       ) : (
         rows.map((row) => (
           <View key={row.id} style={styles.row} wrap={false}>
-            <Text style={[styles.cell, { width: "56%" }]}>{row.name}</Text>
-            <Text style={[styles.cell, styles.right, { width: "18%" }]}>{row.count}</Text>
+            <Text style={[styles.cell, { width: "58%" }]}>{row.name}</Text>
+            <Text style={[styles.cell, styles.right, { width: "16%" }]}>{String(row.count)}</Text>
             <Text style={[styles.cell, styles.right, { width: "26%" }]}>{row.valueLabel}</Text>
           </View>
         ))
