@@ -1,4 +1,5 @@
 import { financialYearLabel, formatInvoiceTimestamp, invoiceToday } from "@/lib/invoice";
+import { composePhone, nationalPhoneError, splitStoredPhone } from "@/lib/settings-places";
 
 export const COMPANY_COLUMNS =
   "legal_name, trade_name, address_line1, address_line2, city, state, postal_code, country, email, phone, website, gstin, pan, cin, logo_url, default_currency, default_payment_terms, invoice_notes, default_gst_enabled, default_gst_rate, updated_at";
@@ -435,7 +436,9 @@ export function parseCompanyForm(
   const postalCode = fieldText(formData, "postal_code");
   const country = fieldText(formData, "country") || "India";
   const email = fieldText(formData, "email").toLowerCase();
-  const phone = fieldText(formData, "phone");
+  const phoneInput = fieldText(formData, "phone");
+  const storedPhone = splitStoredPhone(phoneInput, country);
+  const phone = phoneInput ? composePhone(storedPhone.dial, storedPhone.number) : "";
   const website = fieldText(formData, "website");
 
   if (!legalName) errors.legal_name = "Enter the legal name.";
@@ -454,7 +457,10 @@ export function parseCompanyForm(
   } else {
     limit(email, 160, "email", "Email", errors);
   }
-  limit(phone, 30, "phone", "Phone", errors);
+  if (phone) {
+    const phoneError = nationalPhoneError(storedPhone.dial, storedPhone.number);
+    if (phone.length > 30 || phoneError) errors.phone = phoneError ?? "Enter a valid phone number.";
+  }
   limit(website, 200, "website", "Website", errors);
 
   let websiteValue: string | null = null;

@@ -18,6 +18,7 @@ import {
   type AuditAction,
   type AuditActorOption,
   type AuditEntry,
+  type AuditDateScope,
   type AuditLogPage,
 } from "@/lib/audit";
 import { invoiceToday } from "@/lib/invoice";
@@ -164,6 +165,7 @@ export async function loadAuditLog(raw: {
   user?: string;
   from?: string;
   to?: string;
+  dates?: string;
   page?: string;
 }): Promise<AuditLogPage> {
   const search = normalizeAuditSearch(raw.q);
@@ -171,8 +173,23 @@ export async function loadAuditLog(raw: {
   const group = normalizeAuditGroup(raw.group);
   const user = normalizeAuditUser(raw.user);
   const month = currentMonthRange();
-  const from = normalizeAuditDate(raw.from) || month.from;
-  const to = auditToOnOrAfterFrom(from, normalizeAuditDate(raw.to) || month.to);
+  const requestedFrom = normalizeAuditDate(raw.from);
+  const requestedTo = normalizeAuditDate(raw.to);
+  let dates: AuditDateScope = "range";
+  let from = month.from;
+  let to = month.to;
+  if (raw.dates === "all") {
+    dates = "all";
+    from = "";
+    to = "";
+  } else if (raw.dates === "from") {
+    dates = "from";
+    from = requestedFrom;
+    to = "";
+  } else if (requestedFrom || requestedTo) {
+    from = requestedFrom || month.from;
+    to = auditToOnOrAfterFrom(from, requestedTo || month.to);
+  }
   const page = normalizeAuditPage(raw.page);
   const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
@@ -211,6 +228,7 @@ export async function loadAuditLog(raw: {
     user,
     from,
     to,
+    dates,
     users,
   };
 

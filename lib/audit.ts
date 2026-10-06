@@ -33,6 +33,8 @@ export const INVOICE_AUDIT_ACTIONS: readonly AuditAction[] = AUDIT_ACTIONS.filte
 
 export type AuditGroup = "all" | "invoice" | "payment";
 
+export type AuditDateScope = "all" | "from" | "range";
+
 const ACTION_LABELS: Record<AuditAction, string> = {
   created: "Invoice Created",
   updated: "Invoice Updated",
@@ -95,6 +97,7 @@ export type AuditLogPage = {
   user: string;
   from: string;
   to: string;
+  dates: AuditDateScope;
   users: AuditActorOption[];
 };
 
@@ -174,7 +177,7 @@ export function formatAuditTimestamp(value: string) {
 }
 
 export function auditLogHref(
-  filters: Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">,
+  filters: Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to" | "dates">,
   page = 1,
 ) {
   const params = new URLSearchParams();
@@ -182,8 +185,15 @@ export function auditLogHref(
   if (filters.action !== "all") params.set("action", filters.action);
   if (filters.group !== "all") params.set("group", filters.group);
   if (filters.user !== "all") params.set("user", filters.user);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
+  if (filters.dates === "all") {
+    params.set("dates", "all");
+  } else if (filters.dates === "from") {
+    params.set("dates", "from");
+    if (filters.from) params.set("from", filters.from);
+  } else {
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+  }
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
   return query ? `/audit?${query}` : "/audit";
@@ -192,12 +202,14 @@ export function auditLogHref(
 export function auditFiltersActive(
   filters: Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">,
 ) {
+  const narrowedDates =
+    Boolean(filters.from || filters.to) && !datesAreCurrentMonth(filters.from, filters.to);
   return (
     filters.search.length > 0 ||
     filters.action !== "all" ||
     filters.group !== "all" ||
     filters.user !== "all" ||
-    !datesAreCurrentMonth(filters.from, filters.to)
+    narrowedDates
   );
 }
 

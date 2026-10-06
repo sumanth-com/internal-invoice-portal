@@ -39,7 +39,7 @@ async function ActivateContent() {
 
 export default function Page() {
   return (
-    <AuthScreen>
+    <AuthScreen logo="inside">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading your invitation…</p>}>
         <ActivateContent />
       </Suspense>

@@ -55,6 +55,42 @@ export function PortalLogo({
   );
 }
 
+export function PortalMark({
+  size = 42,
+  priority = false,
+}: {
+  size?: number;
+  priority?: boolean;
+}) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden bg-[#2F0DA3]"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.22) }}
+    >
+      <PortalLogo size={Math.round(size * 0.78)} priority={priority} />
+    </span>
+  );
+}
+
+export function BrandLockup({
+  size = 42,
+  priority = false,
+  wordmarkClassName,
+}: {
+  size?: number;
+  priority?: boolean;
+  wordmarkClassName?: string;
+}) {
+  return (
+    <span className="flex shrink-0 items-center gap-2.5">
+      <PortalMark size={size} priority={priority} />
+      <span className="hidden sm:block">
+        <BrandLogo height={size} priority={priority} className={wordmarkClassName} />
+      </span>
+    </span>
+  );
+}
+
 export function PortalBrand({ priority = false }: { priority?: boolean }) {
   return (
     <span className="flex shrink-0 items-center gap-2">

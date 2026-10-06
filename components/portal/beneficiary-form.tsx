@@ -21,6 +21,9 @@ import {
   composePhone,
   COUNTRIES,
   DIAL_CODES,
+  limitNationalPhone,
+  phoneDigitBounds,
+  phoneDigitHint,
   postalOptions,
   splitStoredPhone,
   stateOptions,
@@ -108,8 +111,9 @@ export function BeneficiaryForm({
 }) {
   const modal = useModal();
   const initialPhone = splitStoredPhone(beneficiary?.phone ?? "", beneficiary?.country ?? "India");
+  const initialNational = limitNationalPhone(initialPhone.dial, initialPhone.number);
   const [dial, setDial] = useState(initialPhone.dial);
-  const [national, setNational] = useState(initialPhone.number);
+  const [national, setNational] = useState(initialNational);
   const [country, setCountry] = useState(beneficiary?.country ?? "India");
   const [stateName, setStateName] = useState(beneficiary?.state ?? "");
   const [city, setCity] = useState(beneficiary?.city ?? "");
@@ -202,9 +206,10 @@ export function BeneficiaryForm({
                   label="Country code"
                   value={dial}
                   onValue={(next) => {
-                  setDial(next);
-                  setDirty(true);
-                }}
+                    setDial(next);
+                    setNational((current) => limitNationalPhone(next, current));
+                    setDirty(true);
+                  }}
                   choices={DIAL_CODES.map((item) => ({
                     value: item.code,
                     label: item.country,
@@ -215,8 +220,13 @@ export function BeneficiaryForm({
                 <Input
                   id="phone-number"
                   value={national}
-                  onChange={(event) => setNational(event.target.value)}
-                  maxLength={24}
+                  onChange={(event) => {
+                    setNational(limitNationalPhone(dial, event.target.value));
+                    setDirty(true);
+                  }}
+                  inputMode="numeric"
+                  maxLength={phoneDigitBounds(dial).max}
+                  placeholder={phoneDigitHint(dial)}
                   autoComplete="tel-national"
                   aria-invalid={errors.phone ? true : undefined}
                   aria-describedby={errors.phone ? "phone-number-error" : undefined}

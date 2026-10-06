@@ -66,6 +66,12 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  html:has(.marketing-root),
+  html:has(.marketing-root) body {
+    background-color: #f6f4ef;
+    color: #0f172a;
+  }
   .portal-shell {
     --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;

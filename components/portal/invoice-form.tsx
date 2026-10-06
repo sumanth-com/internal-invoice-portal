@@ -777,7 +777,7 @@ export function InvoiceForm({
                 }}
               >
                 <Plus />
-                Add line
+                Add item
               </Button>
             }
           >

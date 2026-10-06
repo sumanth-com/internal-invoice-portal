@@ -174,47 +174,47 @@ export function currencyChoices(country: string) {
 }
 
 export const DIAL_CODES = [
-  { code: "+91", country: "India" },
-  { code: "+1", country: "United States / Canada" },
-  { code: "+44", country: "United Kingdom" },
-  { code: "+971", country: "United Arab Emirates" },
-  { code: "+65", country: "Singapore" },
-  { code: "+61", country: "Australia" },
-  { code: "+81", country: "Japan" },
-  { code: "+86", country: "China" },
-  { code: "+49", country: "Germany" },
-  { code: "+33", country: "France" },
-  { code: "+39", country: "Italy" },
-  { code: "+34", country: "Spain" },
-  { code: "+31", country: "Netherlands" },
-  { code: "+41", country: "Switzerland" },
-  { code: "+46", country: "Sweden" },
-  { code: "+47", country: "Norway" },
-  { code: "+45", country: "Denmark" },
-  { code: "+353", country: "Ireland" },
-  { code: "+64", country: "New Zealand" },
-  { code: "+27", country: "South Africa" },
-  { code: "+966", country: "Saudi Arabia" },
-  { code: "+974", country: "Qatar" },
-  { code: "+965", country: "Kuwait" },
-  { code: "+968", country: "Oman" },
-  { code: "+973", country: "Bahrain" },
-  { code: "+60", country: "Malaysia" },
-  { code: "+62", country: "Indonesia" },
-  { code: "+63", country: "Philippines" },
-  { code: "+66", country: "Thailand" },
-  { code: "+84", country: "Vietnam" },
-  { code: "+82", country: "South Korea" },
-  { code: "+852", country: "Hong Kong" },
-  { code: "+94", country: "Sri Lanka" },
-  { code: "+977", country: "Nepal" },
-  { code: "+880", country: "Bangladesh" },
-  { code: "+92", country: "Pakistan" },
-  { code: "+975", country: "Bhutan" },
-  { code: "+960", country: "Maldives" },
-  { code: "+230", country: "Mauritius" },
-  { code: "+254", country: "Kenya" },
-  { code: "+234", country: "Nigeria" },
+  { code: "+91", country: "India", digits: 10 },
+  { code: "+1", country: "United States / Canada", digits: 10 },
+  { code: "+44", country: "United Kingdom", digits: 10 },
+  { code: "+971", country: "United Arab Emirates", digits: 9 },
+  { code: "+65", country: "Singapore", digits: 8 },
+  { code: "+61", country: "Australia", digits: 9 },
+  { code: "+81", country: "Japan", digits: 10 },
+  { code: "+86", country: "China", digits: 11 },
+  { code: "+49", country: "Germany", digits: [10, 11] },
+  { code: "+33", country: "France", digits: 9 },
+  { code: "+39", country: "Italy", digits: [9, 10] },
+  { code: "+34", country: "Spain", digits: 9 },
+  { code: "+31", country: "Netherlands", digits: 9 },
+  { code: "+41", country: "Switzerland", digits: 9 },
+  { code: "+46", country: "Sweden", digits: 9 },
+  { code: "+47", country: "Norway", digits: 8 },
+  { code: "+45", country: "Denmark", digits: 8 },
+  { code: "+353", country: "Ireland", digits: 9 },
+  { code: "+64", country: "New Zealand", digits: [8, 10] },
+  { code: "+27", country: "South Africa", digits: 9 },
+  { code: "+966", country: "Saudi Arabia", digits: 9 },
+  { code: "+974", country: "Qatar", digits: 8 },
+  { code: "+965", country: "Kuwait", digits: 8 },
+  { code: "+968", country: "Oman", digits: 8 },
+  { code: "+973", country: "Bahrain", digits: 8 },
+  { code: "+60", country: "Malaysia", digits: [9, 10] },
+  { code: "+62", country: "Indonesia", digits: [9, 12] },
+  { code: "+63", country: "Philippines", digits: 10 },
+  { code: "+66", country: "Thailand", digits: 9 },
+  { code: "+84", country: "Vietnam", digits: 9 },
+  { code: "+82", country: "South Korea", digits: [9, 10] },
+  { code: "+852", country: "Hong Kong", digits: 8 },
+  { code: "+94", country: "Sri Lanka", digits: 9 },
+  { code: "+977", country: "Nepal", digits: 10 },
+  { code: "+880", country: "Bangladesh", digits: 10 },
+  { code: "+92", country: "Pakistan", digits: 10 },
+  { code: "+975", country: "Bhutan", digits: 8 },
+  { code: "+960", country: "Maldives", digits: 7 },
+  { code: "+230", country: "Mauritius", digits: 8 },
+  { code: "+254", country: "Kenya", digits: 9 },
+  { code: "+234", country: "Nigeria", digits: 10 },
 ] as const;
 
 function cities(names: readonly string[], pins: Record<string, string[]> = {}) {
@@ -416,9 +416,37 @@ export function splitStoredPhone(phone: string, country: string) {
 }
 
 export function composePhone(dial: string, number: string) {
-  const local = number.trim();
+  const local = nationalPhoneDigits(number);
   if (!local) return "";
   const code = dial.trim();
   return code ? `${code} ${local}` : local;
+}
+
+export function phoneDigitBounds(dial: string) {
+  const digits = DIAL_CODES.find((item) => item.code === dial)?.digits ?? 10;
+  if (typeof digits === "number") return { min: digits, max: digits };
+  return { min: digits[0], max: digits[1] };
+}
+
+export function nationalPhoneDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+export function limitNationalPhone(dial: string, value: string) {
+  return nationalPhoneDigits(value).slice(0, phoneDigitBounds(dial).max);
+}
+
+export function phoneDigitHint(dial: string) {
+  const { min, max } = phoneDigitBounds(dial);
+  return min === max ? `${min} digits` : `${min} to ${max} digits`;
+}
+
+export function nationalPhoneError(dial: string, value: string) {
+  const digits = nationalPhoneDigits(value);
+  if (!digits) return null;
+  const { min, max } = phoneDigitBounds(dial);
+  if (digits.length >= min && digits.length <= max) return null;
+  if (min === max) return `Enter a ${min}-digit mobile number.`;
+  return `Enter a mobile number with ${min} to ${max} digits.`;
 }
 

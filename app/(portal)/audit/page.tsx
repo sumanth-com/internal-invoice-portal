@@ -69,6 +69,7 @@ async function AuditContent({ searchParams }: { searchParams: SearchParams }) {
       user: read("user"),
       from: read("from"),
       to: read("to"),
+      dates: read("dates"),
       group: read("group"),
       page: read("page"),
     });

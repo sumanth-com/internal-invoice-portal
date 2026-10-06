@@ -39,32 +39,56 @@ export function CancelInvoiceButton({ id, number }: { id: string; number: string
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(cancelInvoice, initialState);
   useActionToast(state, state.error, "error");
+  const titleId = useId();
+  const keepRef = useRef<HTMLButtonElement>(null);
 
-  if (!open) {
-    return (
+  useEffect(() => {
+    if (!open) return;
+    keepRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pending) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, pending]);
+
+  return (
+    <>
       <Button type="button" variant="outline" onClick={() => setOpen(true)}>
         <Ban />
         Cancel invoice
       </Button>
-    );
-  }
-
-  return (
-    <form action={action} className="rounded-xl border bg-card p-4 shadow-sm">
-      <input type="hidden" name="id" value={id} />
-      <p className="text-sm font-medium">Cancel invoice {number}?</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        A cancelled invoice cannot be changed.
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="submit" variant="destructive" disabled={pending}>
-          {pending ? "Cancelling…" : "Cancel invoice"}
-        </Button>
-        <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
-          Keep invoice
-        </Button>
-      </div>
-    </form>
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !pending) setOpen(false);
+          }}
+        >
+          <form
+            action={action}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            className="w-full max-w-sm rounded-xl border bg-card p-5 shadow-lg"
+          >
+            <input type="hidden" name="id" value={id} />
+            <h2 id={titleId} className="text-base font-semibold">
+              Cancel invoice {number}?
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">A cancelled invoice cannot be changed.</p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button ref={keepRef} type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
+                Keep invoice
+              </Button>
+              <Button type="submit" variant="destructive" disabled={pending}>
+                {pending ? "Cancelling…" : "Cancel invoice"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }
 

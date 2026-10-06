@@ -1,6 +1,5 @@
 "use client";
 
-import { PortalLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +18,7 @@ function emailError(value: string) {
 }
 
 const fieldClass =
-  "h-12 rounded-xl border-transparent bg-[#f3f6fb] pl-11 text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[#2563eb] focus-visible:ring-[#2563eb] dark:border-white/10 dark:bg-[#121a30] dark:text-white dark:placeholder:text-slate-500";
+  "h-12 rounded-xl border-transparent bg-[#f3f6fb] pl-11 text-slate-900 shadow-none placeholder:text-slate-400 focus-visible:border-[#5B2BD6] focus-visible:ring-[#5B2BD6] dark:border-white/10 dark:bg-[#121a30] dark:text-white dark:placeholder:text-slate-500";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -65,9 +64,6 @@ export function LoginForm() {
   return (
     <form onSubmit={handleLogin} className="grid gap-4" noValidate>
       <div className="mb-1 text-center">
-        <div className="mb-4 flex justify-center">
-          <PortalLogo size={44} priority className="rounded-xl" />
-        </div>
         <h1 className="text-[1.7rem] font-semibold tracking-tight text-slate-950 dark:text-white">Welcome Back</h1>
         <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Please Login to your enterprise account</p>
       </div>
@@ -134,17 +130,17 @@ export function LoginForm() {
             type="checkbox"
             checked={rememberDevice}
             onChange={(event) => setRememberDevice(event.target.checked)}
-            className="size-4 rounded border-slate-300 text-[#2563eb] focus:ring-[#2563eb]"
+            className="size-4 rounded border-slate-300 text-[#5B2BD6] focus:ring-[#5B2BD6]"
           />
           Remember this device
         </label>
-        <Link href="/auth/forgot-password" className="text-sm font-medium text-[#2563eb] hover:text-[#1d4ed8]">
+        <Link href="/auth/forgot-password" className="text-sm font-medium text-[#5B2BD6] hover:text-[#4c22b8]">
           Forgot Password?
         </Link>
       </div>
       <Button
         type="submit"
-        className="mt-1 h-12 w-full rounded-xl bg-[#2563eb] text-sm font-semibold tracking-[0.12em] text-white shadow-none hover:bg-[#1d4ed8]"
+        className="mt-1 h-12 w-full rounded-xl bg-[#5B2BD6] text-sm font-semibold tracking-[0.12em] text-white shadow-none hover:bg-[#4c22b8]"
         disabled={isLoading}
       >
         {isLoading ? <Loader2 className="animate-spin" /> : null}

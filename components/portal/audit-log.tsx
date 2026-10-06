@@ -1,5 +1,6 @@
 "use client";
 
+import { clearAuditLog } from "@/app/(portal)/audit/actions";
 import { IconAction } from "@/components/portal/icon-action";
 import { Modal, ModalBody, ModalFooter } from "@/components/portal/modal";
 import { Badge } from "@/components/ui/badge";
@@ -14,11 +15,12 @@ import {
   formatAuditTimestamp,
   isPaymentAuditAction,
   type AuditAction,
+  type AuditDateScope,
   type AuditEntry,
   type AuditGroup,
   type AuditLogPage,
 } from "@/lib/audit";
-import { currentMonthRange, datesAreCurrentMonth, formatInvoiceDate, invoiceToday } from "@/lib/invoice";
+import { formatInvoiceDate, invoiceToday } from "@/lib/invoice";
 import { cn } from "@/lib/utils";
 import { Activity, CalendarDays, ChevronDown, Eye, FileText, IndianRupee, Search } from "lucide-react";
 import Link from "next/link";
@@ -28,15 +30,18 @@ import { startTransition, useCallback, useEffect, useState, type ReactNode } fro
 const fieldClass =
   "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
 
-type AuditFilters = Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to">;
+type AuditFilters = Pick<AuditLogPage, "search" | "action" | "group" | "user" | "from" | "to" | "dates">;
 type EventCard = "total" | "today" | "invoice" | "payment";
 
 function selectedEventCard(filters: AuditFilters): EventCard | null {
-  if (filters.group === "invoice") return "invoice";
-  if (filters.group === "payment") return "payment";
+  const plain = filters.action === "all" && filters.user === "all" && filters.search.length === 0;
+  if (!plain) return null;
+  if (filters.group === "invoice" && filters.dates === "all") return "invoice";
+  if (filters.group === "payment" && filters.dates === "all") return "payment";
+  if (filters.group !== "all") return null;
   const today = invoiceToday();
   if (filters.from === today && filters.to === today) return "today";
-  if (filters.action === "all" && datesAreCurrentMonth(filters.from, filters.to)) return "total";
+  if (filters.dates === "all") return "total";
   return null;
 }
 
@@ -236,7 +241,11 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
   const [user, setUser] = useState(data.user);
   const [from, setFrom] = useState(data.from);
   const [to, setTo] = useState(data.to);
+  const [dates, setDates] = useState<AuditDateScope>(data.dates);
   const [selected, setSelected] = useState<AuditEntry | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   if (source !== data) {
     setSource(data);
@@ -246,9 +255,10 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
     setUser(data.user);
     setFrom(data.from);
     setTo(data.to);
+    setDates(data.dates);
   }
 
-  const filters: AuditFilters = { search, action, group, user, from, to };
+  const filters: AuditFilters = { search, action, group, user, from, to, dates };
   const filtering = auditFiltersActive(filters);
   const activeCard = selectedEventCard(filters);
 
@@ -261,10 +271,11 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
         user: next?.user ?? user,
         from: next?.from ?? from,
         to: next?.to ?? to,
+        dates: next?.dates ?? dates,
       });
       startTransition(() => router.push(href));
     },
-    [search, action, group, user, from, to, router],
+    [search, action, group, user, from, to, dates, router],
   );
 
   useEffect(() => {
@@ -287,14 +298,28 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
     pushFilters({ action: nextAction, group: nextGroup });
   }
 
+  function resetListFilters() {
+    setSearch("");
+    setAction("all");
+    setUser("all");
+  }
+
   function selectCard(card: EventCard) {
+    resetListFilters();
     if (card === "total") {
-      const month = currentMonthRange();
-      setAction("all");
       setGroup("all");
-      setFrom(month.from);
-      setTo(month.to);
-      pushFilters({ action: "all", group: "all", from: month.from, to: month.to });
+      setFrom("");
+      setTo("");
+      setDates("all");
+      pushFilters({
+        search: "",
+        action: "all",
+        group: "all",
+        user: "all",
+        from: "",
+        to: "",
+        dates: "all",
+      });
       return;
     }
     if (card === "today") {
@@ -302,44 +327,94 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
       setGroup("all");
       setFrom(today);
       setTo(today);
-      pushFilters({ group: "all", from: today, to: today });
+      setDates("range");
+      pushFilters({
+        search: "",
+        action: "all",
+        group: "all",
+        user: "all",
+        from: today,
+        to: today,
+        dates: "range",
+      });
       return;
     }
-    if (card === "invoice") {
-      const nextAction = action !== "all" && isPaymentAuditAction(action) ? "all" : action;
-      setAction(nextAction);
-      setGroup("invoice");
-      pushFilters({ action: nextAction, group: "invoice" });
-      return;
-    }
-    const nextAction = action !== "all" && isPaymentAuditAction(action) ? action : "all";
-    setAction(nextAction);
-    setGroup("payment");
-    pushFilters({ action: nextAction, group: "payment" });
+    const nextGroup = card === "invoice" ? "invoice" : "payment";
+    setGroup(nextGroup);
+    setFrom("");
+    setTo("");
+    setDates("all");
+    pushFilters({
+      search: "",
+      action: "all",
+      group: nextGroup,
+      user: "all",
+      from: "",
+      to: "",
+      dates: "all",
+    });
   }
 
   function showAllActivity() {
-    const month = currentMonthRange();
     setSearch("");
     setAction("all");
     setGroup("all");
     setUser("all");
-    setFrom(month.from);
-    setTo(month.to);
-    startTransition(() => router.push("/audit"));
+    setFrom("");
+    setTo("");
+    setDates("all");
+    pushFilters({
+      search: "",
+      action: "all",
+      group: "all",
+      user: "all",
+      from: "",
+      to: "",
+      dates: "all",
+    });
   }
 
   function applyFrom(value: string) {
-    const nextTo = auditToOnOrAfterFrom(value, to);
+    if (!value) {
+      setFrom("");
+      setTo("");
+      setDates("all");
+      pushFilters({ from: "", to: "", dates: "all" });
+      return;
+    }
+    const nextTo = to ? auditToOnOrAfterFrom(value, to) : "";
+    const nextDates: AuditDateScope = nextTo ? "range" : "from";
     setFrom(value);
     setTo(nextTo);
-    pushFilters({ from: value, to: nextTo });
+    setDates(nextDates);
+    pushFilters({ from: value, to: nextTo, dates: nextDates });
   }
 
   function applyTo(value: string) {
-    const nextTo = value && from && value < from ? from : value;
+    if (!value) {
+      const nextDates: AuditDateScope = from ? "from" : "all";
+      setTo("");
+      setDates(nextDates);
+      pushFilters({ to: "", dates: nextDates });
+      return;
+    }
+    const nextTo = from && value < from ? from : value;
     setTo(nextTo);
-    pushFilters({ to: nextTo });
+    setDates("range");
+    pushFilters({ to: nextTo, dates: "range" });
+  }
+
+  async function removeAllActivity() {
+    setClearing(true);
+    setClearError(null);
+    const result = await clearAuditLog();
+    setClearing(false);
+    if (result.error) {
+      setClearError(result.error);
+      return;
+    }
+    setConfirmClear(false);
+    startTransition(() => router.refresh());
   }
 
   return (
@@ -381,11 +456,24 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex shrink-0 flex-col gap-3 border-b p-4">
-          <div>
-            <h2 className="text-base font-semibold">{filtering ? "Matching activity" : "All activity"}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {filtering ? "Activity matching your search and filters." : "Newest invoice activity first."}
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold">{filtering ? "Matching activity" : "All activity"}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {filtering ? "Activity matching your search and filters." : "Newest invoice activity first."}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                setClearError(null);
+                setConfirmClear(true);
+              }}
+            >
+              Delete all
+            </Button>
           </div>
           <form
             className="flex items-center gap-2 overflow-x-auto"
@@ -538,6 +626,34 @@ export function AuditLog({ data }: { data: AuditLogPage }) {
       </section>
 
       <AuditDetailModal entry={selected} onClose={() => setSelected(null)} />
+      <Modal
+        open={confirmClear}
+        onClose={() => {
+          if (!clearing) setConfirmClear(false);
+        }}
+        title="Delete all activity"
+        description="This removes every event from the audit log."
+      >
+        <ModalBody>
+          {clearError ? (
+            <p role="alert" className="px-4 pt-4 text-sm text-destructive sm:px-6">
+              {clearError}
+            </p>
+          ) : (
+            <p className="px-4 pt-4 text-sm text-muted-foreground sm:px-6">
+              The history shown here will be cleared. Invoice records stay as they are.
+            </p>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={() => setConfirmClear(false)} disabled={clearing}>
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" onClick={removeAllActivity} disabled={clearing}>
+            {clearing ? "Deleting…" : "Delete all"}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

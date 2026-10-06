@@ -1,6 +1,25 @@
-import { PortalLogo } from "@/components/brand-logo";
+import { PortalLogo, PortalMark } from "@/components/brand-logo";
 
-export function AuthScreen({ children }: { children: React.ReactNode }) {
+export function AuthScreen({
+  children,
+  logo = "above",
+}: {
+  children: React.ReactNode;
+  logo?: "above" | "inside";
+}) {
+  if (logo === "inside") {
+    return (
+      <main className="flex min-h-svh items-center justify-center bg-muted/40 px-4 py-8 sm:py-10">
+        <section className="w-full max-w-md rounded-xl border bg-card px-6 py-7 shadow-sm sm:px-8">
+          <div className="mb-6">
+            <PortalMark size={44} priority />
+          </div>
+          {children}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/40 px-4 py-10">
       <div className="w-full max-w-md">

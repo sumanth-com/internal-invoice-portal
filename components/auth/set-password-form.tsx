@@ -122,7 +122,15 @@ export function SetPasswordForm({
         }}
         confirmError={confirmError}
       />
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button
+        type="submit"
+        className={
+          mode === "activate"
+            ? "h-11 w-full rounded-full bg-[#5B2BD6] text-white shadow-none hover:bg-[#4c22b8]"
+            : "w-full"
+        }
+        disabled={isLoading}
+      >
         {isLoading ? <Loader2 className="animate-spin" /> : null}
         {isLoading ? "Saving…" : mode === "activate" ? "Activate account" : "Update password"}
       </Button>

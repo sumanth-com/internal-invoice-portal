@@ -1,3 +1,5 @@
+import { composePhone, nationalPhoneError, splitStoredPhone } from "@/lib/settings-places";
+
 export type BeneficiaryStatusFilter = "all" | "active" | "inactive";
 
 export type BeneficiaryField =
@@ -194,16 +196,12 @@ export function parseBeneficiaryForm(
   const phoneText = fieldText(formData, "phone");
   let phone: string | null = null;
   if (phoneText) {
-    const digits = phoneText.replace(/\D/g, "");
-    if (
-      phoneText.length > 30 ||
-      !PHONE_PATTERN.test(phoneText) ||
-      digits.length < 7 ||
-      digits.length > 15
-    ) {
-      errors.phone = "Enter a valid mobile number.";
+    const stored = splitStoredPhone(phoneText, "");
+    const phoneError = nationalPhoneError(stored.dial, stored.number);
+    if (phoneText.length > 30 || !PHONE_PATTERN.test(phoneText) || phoneError) {
+      errors.phone = phoneError ?? "Enter a valid mobile number.";
     } else {
-      phone = phoneText;
+      phone = composePhone(stored.dial, stored.number);
     }
   }
 

@@ -23,6 +23,9 @@ import {
   composePhone,
   COUNTRIES,
   DIAL_CODES,
+  limitNationalPhone,
+  phoneDigitBounds,
+  phoneDigitHint,
   postalOptions,
   splitStoredPhone,
   stateOptions,
@@ -72,9 +75,10 @@ export function CompanySettingsSection({
   onSaved: (details: CompanyDetails) => void;
 }) {
   const initialPhone = splitStoredPhone(company.phone, company.country);
+  const initialNational = limitNationalPhone(initialPhone.dial, initialPhone.number);
   const [values, setValues] = useState(company);
   const [dial, setDial] = useState(initialPhone.dial);
-  const [national, setNational] = useState(initialPhone.number);
+  const [national, setNational] = useState(initialNational);
   const [editing, setEditing] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const [state, formAction, pending] = useActionState(saveCompanySettings, emptyCompanyFormState);
@@ -91,7 +95,7 @@ export function CompanySettingsSection({
     setValues((current) => ({ ...current, ...state.saved, exists: true }));
     const nextPhone = splitStoredPhone(state.saved.phone, state.saved.country);
     setDial(nextPhone.dial);
-    setNational(nextPhone.number);
+    setNational(limitNationalPhone(nextPhone.dial, nextPhone.number));
     setEditing(false);
     onSaved(state.saved);
     invalidateInvoiceFormOptions();
@@ -259,7 +263,10 @@ export function CompanySettingsSection({
                   id="phone-code"
                   label="Country code"
                   value={dial}
-                  onValue={setDial}
+                  onValue={(next) => {
+                    setDial(next);
+                    setNational((current) => limitNationalPhone(next, current));
+                  }}
                   choices={DIAL_CODES.map((item) => ({
                     value: item.code,
                     label: item.country,
@@ -270,8 +277,10 @@ export function CompanySettingsSection({
                 <Input
                   id="phone-number"
                   value={national}
-                  onChange={(event) => setNational(event.target.value)}
-                  maxLength={24}
+                  onChange={(event) => setNational(limitNationalPhone(dial, event.target.value))}
+                  inputMode="numeric"
+                  maxLength={phoneDigitBounds(dial).max}
+                  placeholder={phoneDigitHint(dial)}
                   autoComplete="tel-national"
                   aria-invalid={errors.phone ? true : undefined}
                   aria-describedby={errors.phone ? "phone-number-error" : undefined}

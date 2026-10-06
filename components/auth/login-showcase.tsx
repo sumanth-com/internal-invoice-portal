@@ -3,7 +3,7 @@ import Image from "next/image";
 
 export function LoginShowcase() {
   return (
-    <aside className="flex h-full flex-col rounded-[28px] bg-[linear-gradient(165deg,#3b82f6_0%,#1d4ed8_48%,#1e40af_100%)] px-7 py-7 text-left text-white xl:px-8 dark:bg-[linear-gradient(165deg,#1e4fd0_0%,#163e9c_52%,#102a68_100%)]">
+    <aside className="flex h-full flex-col rounded-[28px] bg-[linear-gradient(165deg,#7C4DFF_0%,#5B2BD6_48%,#3d1a9e_100%)] px-7 py-7 text-left text-white xl:px-8 dark:bg-[linear-gradient(165deg,#6d3ef0_0%,#4c22b8_52%,#31148a_100%)]">
       <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-semibold tracking-[0.16em]">
         <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.25)]" />
         iFRANCHISE

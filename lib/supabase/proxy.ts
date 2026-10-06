@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
 const PUBLIC_PATHS = new Set([
+  "/",
+  "/privacy-policy",
+  "/terms-and-conditions",
   "/auth/login",
   "/auth/forgot-password",
   "/auth/reset-password",
