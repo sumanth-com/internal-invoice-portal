@@ -438,18 +438,16 @@ function InfoCell({
   label,
   value,
   index,
-  wide = false,
 }: {
   label: string;
   value: string;
   index: number;
-  wide?: boolean;
 }) {
-  const lastInRow = wide ? index === 4 : index % 3 === 2;
+  const lastInRow = index % 2 === 1;
   const edge = {
-    width: wide ? "50%" : "33.33%",
+    width: "50%",
     borderRightWidth: lastInRow ? 0 : 1,
-    borderBottomWidth: index >= 3 ? 0 : 1,
+    borderBottomWidth: index >= 2 ? 0 : 1,
   };
   return (
     <View style={[s.infoCell, edge]}>
@@ -538,11 +536,10 @@ function InvoiceDocument({ invoice, logo }: InvoicePdfData) {
   const paymentTerms =
     storedTerms && storedTerms !== PAYMENT_TERMS ? `${PAYMENT_TERMS}\n${storedTerms}` : PAYMENT_TERMS;
   const summary = [
-    ["Client name", invoice.beneficiaryName || to.name || "—"],
+    ["Client legal name", to.trade || "—"],
     ["Due date", invoice.dueDate ? formatInvoiceDate(invoice.dueDate) : "—"],
     ["Place of supply", invoice.placeOfSupply || "—"],
     ["Deal / brand reference", invoice.dealReference || "—"],
-    ["GSTIN", invoice.clientGstin || to.gstin || "—"],
   ];
 
   return (
@@ -598,11 +595,8 @@ function InvoiceDocument({ invoice, logo }: InvoicePdfData) {
         </View>
 
         <View style={s.info}>
-          {summary.slice(0, 3).map(([label, value], index) => (
+          {summary.map(([label, value], index) => (
             <InfoCell key={label} label={label} value={value} index={index} />
-          ))}
-          {summary.slice(3).map(([label, value], index) => (
-            <InfoCell key={label} label={label} value={value} index={index + 3} wide />
           ))}
         </View>
 

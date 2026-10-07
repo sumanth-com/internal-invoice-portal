@@ -10,10 +10,15 @@ import {
   type BeneficiaryMutationState,
 } from "@/lib/beneficiary";
 import {
+  beneficiaryLogoPathFromForm,
+  removeBeneficiaryLogo,
+} from "@/lib/beneficiary-logo";
+import {
   BENEFICIARY_COLUMNS,
   beneficiaryHasInvoices,
   loadBeneficiary,
   mapBeneficiary,
+  signBeneficiaryRecord,
 } from "@/lib/beneficiaries";
 import { recordBeneficiaryNotification } from "@/lib/portal-notifications";
 import { getPortalUser } from "@/lib/portal-user";
@@ -40,19 +45,23 @@ export async function createBeneficiary(
   }
 
   const supabase = await createClient();
+  const logo = beneficiaryLogoPathFromForm(user.id, formData, null);
+  if ("error" in logo) return denied(logo.error);
+
   const { data, error } = await supabase
     .from("beneficiaries")
-    .insert(beneficiaryToRow(parsed.value))
+    .insert({ ...beneficiaryToRow(parsed.value), logo_path: logo.path })
     .select(BENEFICIARY_COLUMNS)
     .single();
 
   if (error || !data) {
+    await removeBeneficiaryLogo(supabase, logo.path);
     return denied(
       beneficiaryErrorMessage(error, "The beneficiary could not be added."),
     );
   }
 
-  const saved = mapBeneficiary(data);
+  const saved = await signBeneficiaryRecord(supabase, mapBeneficiary(data));
   await recordBeneficiaryNotification(saved.id, saved.legalName, true);
   return { error: null, fieldErrors: {}, saved };
 }
@@ -78,22 +87,47 @@ export async function updateBeneficiary(
   }
 
   const supabase = await createClient();
+  const existing = await supabase
+    .from("beneficiaries")
+    .select("logo_path")
+    .eq("id", id)
+    .maybeSingle();
+  if (existing.error) {
+    return denied("The beneficiary could not be saved.");
+  }
+  if (!existing.data) {
+    return denied("This beneficiary was not found, or you do not have permission to edit it.");
+  }
+
+  const logo = beneficiaryLogoPathFromForm(user.id, formData, existing.data.logo_path);
+  if ("error" in logo) return denied(logo.error);
+
   const { data, error } = await supabase
     .from("beneficiaries")
-    .update(beneficiaryToRow(parsed.value))
+    .update({ ...beneficiaryToRow(parsed.value), logo_path: logo.path })
     .eq("id", id)
     .select(BENEFICIARY_COLUMNS);
 
   if (error) {
+    if (logo.path && logo.path !== existing.data.logo_path) {
+      await removeBeneficiaryLogo(supabase, logo.path);
+    }
     return denied(
       beneficiaryErrorMessage(error, "The beneficiary could not be saved."),
     );
   }
   if (!data?.length) {
+    if (logo.path && logo.path !== existing.data.logo_path) {
+      await removeBeneficiaryLogo(supabase, logo.path);
+    }
     return denied("This beneficiary was not found, or you do not have permission to edit it.");
   }
 
-  const saved = mapBeneficiary(data[0]);
+  if (existing.data.logo_path && existing.data.logo_path !== logo.path) {
+    await removeBeneficiaryLogo(supabase, existing.data.logo_path);
+  }
+
+  const saved = await signBeneficiaryRecord(supabase, mapBeneficiary(data[0]));
   await recordBeneficiaryNotification(saved.id, saved.legalName, false);
   return { error: null, fieldErrors: {}, saved };
 }
@@ -116,7 +150,7 @@ export async function deleteBeneficiary(
   const supabase = await createClient();
   const existing = await supabase
     .from("beneficiaries")
-    .select("id")
+    .select("id, logo_path")
     .eq("id", id)
     .maybeSingle();
 
@@ -156,6 +190,7 @@ export async function deleteBeneficiary(
     return { error: "Only an admin can delete a beneficiary." };
   }
 
+  await removeBeneficiaryLogo(supabase, existing.data.logo_path);
   revalidatePath("/beneficiaries");
   revalidatePath("/dashboard");
   redirect("/beneficiaries?notice=deleted");

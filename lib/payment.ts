@@ -40,6 +40,7 @@ export type PayableInvoice = {
 export type PaymentBeneficiaryOption = {
   id: string;
   name: string;
+  logoUrl: string | null;
 };
 
 export type PaymentListData = {

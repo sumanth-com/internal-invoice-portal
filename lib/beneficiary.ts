@@ -55,9 +55,11 @@ export type BeneficiarySummary = {
   gstin: string | null;
   city: string | null;
   isActive: boolean;
+  logoUrl: string | null;
 };
 
 export type Beneficiary = BeneficiarySummary & {
+  logoPath: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   state: string | null;
@@ -77,7 +79,9 @@ export type BeneficiaryListData = {
   search: string;
   status: BeneficiaryStatusFilter;
   contact: string;
+  company: string;
   contactNames: string[];
+  companyNames: string[];
   truncated: boolean;
 };
 
@@ -119,17 +123,24 @@ export function normalizeBeneficiaryContact(value: string | undefined) {
   return (value ?? "").trim().slice(0, 120);
 }
 
+export function normalizeBeneficiaryCompany(value: string | undefined) {
+  return (value ?? "").trim().slice(0, 200);
+}
+
 export function beneficiaryListHref(options: {
   search?: string;
   status?: BeneficiaryStatusFilter;
   contact?: string;
+  company?: string;
 }) {
   const params = new URLSearchParams();
   const search = options.search?.trim();
   const contact = normalizeBeneficiaryContact(options.contact);
+  const company = normalizeBeneficiaryCompany(options.company);
   if (search) params.set("q", search);
   if (options.status && options.status !== "all") params.set("status", options.status);
   if (contact) params.set("contact", contact);
+  if (company) params.set("company", company);
   const query = params.toString();
   return query ? `/beneficiaries?${query}` : "/beneficiaries";
 }

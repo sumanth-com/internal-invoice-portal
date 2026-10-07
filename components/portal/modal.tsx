@@ -58,7 +58,7 @@ export function Modal({
   onClose: () => void;
   title: string;
   description?: string;
-  size?: "md" | "lg" | "xl";
+  size?: "md" | "wide" | "lg" | "xl";
   discardMessage?: string;
   children: ReactNode;
 }) {
@@ -157,7 +157,7 @@ export function Modal({
         <div
           className={cn(
             "relative m-auto flex min-h-0 w-full max-h-[92vh] flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl",
-            size === "xl" ? "h-[92vh] max-w-[1440px]" : size === "md" ? "h-auto max-w-2xl" : "h-auto max-w-4xl",
+            size === "xl" ? "h-[92vh] max-w-[1440px]" : size === "md" ? "h-auto max-w-2xl" : size === "wide" ? "h-auto max-w-3xl" : "h-auto max-w-4xl",
             "transition duration-150 ease-out motion-reduce:transition-none",
             visible ? "translate-y-0 opacity-100 sm:scale-100" : "translate-y-3 opacity-0 sm:scale-[0.98]",
           )}

@@ -25,6 +25,7 @@ import {
   type InvoiceStatus,
   type InvoiceSummary,
 } from "@/lib/invoice";
+import { signBeneficiaryLogoMap } from "@/lib/beneficiary-logo";
 import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
@@ -102,6 +103,7 @@ function mapParty(row: {
   gstin: string | null;
   pan: string | null;
   is_active: boolean;
+  logo_path?: string | null;
 }): InvoicePartyOption {
   return {
     id: row.id,
@@ -118,6 +120,7 @@ function mapParty(row: {
     gstin: row.gstin,
     pan: row.pan,
     isActive: row.is_active,
+    logoUrl: null,
   };
 }
 
@@ -175,9 +178,15 @@ export async function loadInvoices(raw: {
   const supabase = await createClient();
   const beneficiaryOptions = supabase
     .from("beneficiaries")
-    .select("id, legal_name")
+    .select("id, legal_name, logo_path")
     .eq("created_by", ownerId ?? "")
     .order("legal_name", { ascending: true });
+  const numberOptions = supabase
+    .from("invoices")
+    .select("invoice_number")
+    .eq("created_by", ownerId ?? "")
+    .order("invoice_number", { ascending: false })
+    .limit(500);
 
   let beneficiaryIds: string[] = [];
   if (search) {
@@ -201,17 +210,20 @@ export async function loadInvoices(raw: {
   }
 
   if (paymentIds && paymentIds.length === 0) {
-    const [total, options] = await Promise.all([
+    const [total, options, numbers] = await Promise.all([
       countInvoices(supabase, ownerId ?? ""),
       beneficiaryOptions,
+      numberOptions,
     ]);
     if (options.error) throw options.error;
+    if (numbers.error) throw numbers.error;
     return {
       invoices: [],
       total,
       search,
       beneficiary,
-      beneficiaries: mapBeneficiaryOptions(options.data),
+      beneficiaries: await mapBeneficiaryOptions(supabase, options.data),
+      invoiceNumbers: invoiceNumberOptions(numbers.data),
       status,
       payment,
       from,
@@ -255,13 +267,15 @@ export async function loadInvoices(raw: {
     query = query.order("invoice_number", { ascending: true });
   }
 
-  const [{ data, error }, total, options] = await Promise.all([
+  const [{ data, error }, total, options, numbers] = await Promise.all([
     query,
     countInvoices(supabase, ownerId ?? ""),
     beneficiaryOptions,
+    numberOptions,
   ]);
   if (error) throw error;
   if (options.error) throw options.error;
+  if (numbers.error) throw numbers.error;
 
   let rows = (data ?? []) as SummaryRow[];
   if (sort === "beneficiary_asc") {
@@ -295,7 +309,8 @@ export async function loadInvoices(raw: {
     total,
     search,
     beneficiary,
-    beneficiaries: mapBeneficiaryOptions(options.data),
+    beneficiaries: await mapBeneficiaryOptions(supabase, options.data),
+    invoiceNumbers: invoiceNumberOptions(numbers.data),
     status,
     payment,
     from,
@@ -309,10 +324,29 @@ function quotedLike(value: string) {
   return `"%${value.replaceAll('"', "")}%"`;
 }
 
-function mapBeneficiaryOptions(
-  rows: { id: string; legal_name: string }[] | null,
+async function mapBeneficiaryOptions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: { id: string; legal_name: string; logo_path: string | null }[] | null,
 ) {
-  return (rows ?? []).map((row) => ({ id: row.id, name: row.legal_name }));
+  const logos = await signBeneficiaryLogoMap(
+    supabase,
+    (rows ?? []).map((row) => row.logo_path),
+  );
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    name: row.legal_name,
+    logoUrl: row.logo_path ? logos.get(row.logo_path) ?? null : null,
+  }));
+}
+
+function invoiceNumberOptions(rows: { invoice_number: string }[] | null) {
+  return [
+    ...new Set(
+      (rows ?? [])
+        .map((row) => row.invoice_number?.trim() ?? "")
+        .filter((number) => number.length > 0),
+    ),
+  ];
 }
 
 export async function loadInvoice(id: string): Promise<InvoiceDetail | null> {
@@ -420,7 +454,7 @@ export async function loadInvoiceFormOptions(selected?: {
     supabase
       .from("beneficiaries")
       .select(
-        "id, legal_name, contact_name, email, phone, address_line1, address_line2, city, state, postal_code, country, gstin, pan, is_active",
+        "id, legal_name, contact_name, email, phone, address_line1, address_line2, city, state, postal_code, country, gstin, pan, is_active, logo_path",
       )
       .eq("created_by", ownerId ?? "")
       .order("legal_name", { ascending: true }),
@@ -442,8 +476,15 @@ export async function loadInvoiceFormOptions(selected?: {
   if (banksResult.error) throw banksResult.error;
   if (companyResult.error) throw companyResult.error;
 
+  const partyLogos = await signBeneficiaryLogoMap(
+    supabase,
+    (beneficiariesResult.data ?? []).map((row) => row.logo_path),
+  );
   const beneficiaries = (beneficiariesResult.data ?? [])
-    .map(mapParty)
+    .map((row) => ({
+      ...mapParty(row),
+      logoUrl: row.logo_path ? partyLogos.get(row.logo_path) ?? null : null,
+    }))
     .filter(
       (beneficiary) =>
         beneficiary.isActive || beneficiary.id === selected?.beneficiaryId,

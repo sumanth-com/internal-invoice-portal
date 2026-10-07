@@ -1,5 +1,6 @@
 import { ReportsView } from "@/components/portal/reports-view";
 import { TableSkeleton } from "@/components/portal/skeletons";
+import { beneficiaryLogoUrls } from "@/lib/beneficiaries";
 import { loadReport } from "@/lib/reports-data";
 import {
   beneficiaryIdFromParam,
@@ -44,7 +45,12 @@ async function ReportsContent({ searchParams }: { searchParams: SearchParams }) 
     const type = reportTypeFromParam(read("type"));
     const query = read("q")?.trim() ?? "";
     const beneficiary = beneficiaryIdFromParam(read("beneficiary"));
-    const beneficiaries = reportBeneficiaryOptions(loaded.invoices);
+    const options = reportBeneficiaryOptions(loaded.invoices);
+    const logos = await beneficiaryLogoUrls(options.map((item) => item.id));
+    const beneficiaries = options.map((item) => ({
+      ...item,
+      logoUrl: logos.get(item.id) ?? null,
+    }));
     if (loaded.view.error) {
       return (
         <ReportsView

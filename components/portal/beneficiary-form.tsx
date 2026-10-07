@@ -13,6 +13,8 @@ import {
   type BeneficiaryFormState,
 } from "@/lib/beneficiary";
 import { ChoiceSelect, SuggestField } from "@/components/portal/suggest-field";
+import { uploadBeneficiaryLogo } from "@/lib/beneficiary-logo-client";
+import { inspectBeneficiaryLogo } from "@/lib/beneficiary-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +31,7 @@ import {
   stateOptions,
 } from "@/lib/settings-places";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { ImagePlus, Loader2 } from "lucide-react";
 import {
   startTransition,
   useActionState,
@@ -80,12 +82,12 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-3 shadow-sm">
+    <section className="rounded-xl border bg-card p-4 shadow-sm">
       <h3 className="text-sm font-semibold">{title}</h3>
       {description ? (
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       ) : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">{children}</div>
+      <div className="mt-4 grid gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -118,6 +120,14 @@ export function BeneficiaryForm({
   const [stateName, setStateName] = useState(beneficiary?.state ?? "");
   const [city, setCity] = useState(beneficiary?.city ?? "");
   const [postalCode, setPostalCode] = useState(beneficiary?.postalCode ?? "");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const shownLogo = previewUrl ?? (logoRemoved ? null : beneficiary?.logoUrl ?? null);
   const action = mode === "create" ? createBeneficiary : updateBeneficiary;
   const [state, formAction, pending] = useActionState<
     BeneficiaryFormState,
@@ -128,9 +138,50 @@ export function BeneficiaryForm({
   const handled = useRef<BeneficiaryFormState | null>(null);
   const { setBusy, setDirty } = modal;
 
+  const saving = pending || uploading;
+
   useEffect(() => {
-    setBusy(pending);
-  }, [pending, setBusy]);
+    if (pending) setUploading(false);
+  }, [pending]);
+
+  useEffect(() => {
+    setBusy(saving);
+  }, [saving, setBusy]);
+
+  useEffect(() => {
+    return () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    };
+  }, []);
+
+  async function chooseLogo(next: File | undefined) {
+    setLogoError(null);
+    if (!next) return;
+    const inspected = inspectBeneficiaryLogo(new Uint8Array(await next.arrayBuffer()));
+    if ("error" in inspected) {
+      setLogoError(inspected.error);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    const url = URL.createObjectURL(next);
+    previewRef.current = url;
+    setPreviewUrl(url);
+    setLogoFile(next);
+    setLogoRemoved(false);
+    setDirty(true);
+  }
+
+  function clearLogo() {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = null;
+    setPreviewUrl(null);
+    setLogoFile(null);
+    setLogoRemoved(true);
+    setLogoError(null);
+    if (fileRef.current) fileRef.current.value = "";
+    setDirty(true);
+  }
 
   useEffect(() => {
     if (state.saved && handled.current !== state) {
@@ -144,9 +195,24 @@ export function BeneficiaryForm({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (pending) return;
+        if (saving) return;
         const formData = new FormData(event.currentTarget);
-        startTransition(() => formAction(formData));
+        const chosen = logoFile;
+        void (async () => {
+          if (chosen) {
+            setUploading(true);
+            try {
+              formData.set("logo_path", await uploadBeneficiaryLogo(chosen));
+            } catch (error) {
+              setLogoError(error instanceof Error ? error.message : "The logo could not be uploaded.");
+              setUploading(false);
+              return;
+            }
+          } else if (logoRemoved) {
+            formData.set("remove_logo", "1");
+          }
+          startTransition(() => formAction(formData));
+        })();
       }}
       onChange={() => setDirty(true)}
       className="flex min-h-0 flex-auto flex-col"
@@ -159,14 +225,54 @@ export function BeneficiaryForm({
       <input type="hidden" name="phone" value={composePhone(dial, national)} />
 
       <ModalBody>
-        <fieldset disabled={pending} className="flex flex-col gap-3 p-4">
+        <fieldset disabled={saving} className="flex flex-col gap-4 p-4 sm:p-5">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="flex size-20 items-center justify-center overflow-hidden rounded-2xl border border-dashed bg-white"
+              aria-label={shownLogo ? "Change logo" : "Add logo"}
+            >
+              {shownLogo ? (
+                <img src={shownLogo} alt="" className="size-full object-contain p-1.5" />
+              ) : (
+                <ImagePlus className="size-6 text-muted-foreground" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="text-sm font-medium text-primary"
+            >
+              {shownLogo ? "Change logo" : "Add logo"}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              JPEG, PNG, and other image formats. 4 MB maximum.
+            </p>
+            {shownLogo ? (
+              <button type="button" onClick={clearLogo} className="text-xs text-muted-foreground underline-offset-4 hover:underline">
+                Remove logo
+              </button>
+            ) : null}
+            {logoError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {logoError}
+              </p>
+            ) : null}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => void chooseLogo(event.target.files?.[0])}
+            />
+          </div>
           <Section title="Company">
             <Field
               id="legal_name"
               label="Company / legal name"
               required
               error={errors.legal_name}
-              className="sm:col-span-2"
             >
               <Input
                 {...textProps("legal_name", errors.legal_name)}
@@ -198,7 +304,6 @@ export function BeneficiaryForm({
               id="phone-number"
               label="Mobile number"
               error={errors.phone}
-              className="sm:col-span-2"
             >
               <div className="flex gap-2">
                 <ChoiceSelect
@@ -345,12 +450,12 @@ export function BeneficiaryForm({
       </ModalBody>
 
       <ModalFooter className="px-4 py-2.5">
-        <Button type="button" variant="outline" disabled={pending} onClick={modal.requestClose}>
+        <Button type="button" variant="outline" disabled={saving} onClick={modal.requestClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? <Loader2 className="animate-spin" /> : null}
-          {pending ? "Saving…" : mode === "create" ? "Add beneficiary" : "Save changes"}
+        <Button type="submit" disabled={saving}>
+          {saving ? <Loader2 className="animate-spin" /> : null}
+          {saving ? "Saving…" : mode === "create" ? "Add beneficiary" : "Save changes"}
         </Button>
       </ModalFooter>
     </form>

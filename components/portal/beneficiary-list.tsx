@@ -14,7 +14,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   beneficiaryListHref,
   formatBeneficiaryAddress,
@@ -26,10 +25,10 @@ import {
 } from "@/lib/beneficiary";
 import { requestNotificationRefresh } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, CircleCheck, CircleOff, Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, CircleOff, Eye, Pencil, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { startTransition, useCallback, useRef, useState, type ReactNode } from "react";
 
 const fieldClass =
   "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
@@ -116,6 +115,7 @@ function toSummary(beneficiary: Beneficiary): BeneficiarySummary {
     gstin: beneficiary.gstin,
     city: beneficiary.city,
     isActive: beneficiary.isActive,
+    logoUrl: beneficiary.logoUrl,
   };
 }
 
@@ -134,17 +134,23 @@ function applySaved(data: BeneficiaryListData, saved: BeneficiarySummary): Benef
 
   const matchesStatus = data.status === "all" || (data.status === "active") === saved.isActive;
   const matchesContact = !data.contact || saved.contactName?.trim() === data.contact;
+  const matchesCompany = !data.company || saved.legalName.trim() === data.company;
   const others = data.beneficiaries.filter((item) => item.id !== saved.id);
   const beneficiaries =
-    matchesStatus && matchesContact
+    matchesStatus && matchesContact && matchesCompany
       ? [...others, saved].sort((left, right) => left.legalName.localeCompare(right.legalName, "en"))
       : others;
   const contactNames =
     saved.contactName?.trim() && !data.contactNames.includes(saved.contactName.trim())
       ? [...data.contactNames, saved.contactName.trim()].sort((left, right) => left.localeCompare(right, "en"))
       : data.contactNames;
+  const companyName = saved.legalName.trim();
+  const companyNames =
+    companyName && !data.companyNames.includes(companyName)
+      ? [...data.companyNames, companyName].sort((left, right) => left.localeCompare(right, "en"))
+      : data.companyNames;
 
-  return { ...data, total, active, inactive, beneficiaries, contactNames };
+  return { ...data, total, active, inactive, beneficiaries, contactNames, companyNames };
 }
 
 function FilterSelect({
@@ -189,12 +195,12 @@ function BeneficiaryStatusControl({
         disabled={busy}
         aria-label={`Status for ${beneficiary.legalName}`}
         className={cn(
-          "inline-flex h-7 w-[8.25rem] items-center justify-between gap-1 rounded-full px-2.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait",
+          "relative inline-flex h-7 w-[7.5rem] items-center justify-center rounded-full px-6 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait",
           beneficiary.isActive ? "bg-emerald-600 text-white" : "bg-slate-500 text-white",
         )}
       >
-        <span>{beneficiary.isActive ? "Active" : "Inactive"}</span>
-        <ChevronDown className="size-3 shrink-0 opacity-80" />
+        <span className="text-center">{beneficiary.isActive ? "Active" : "Inactive"}</span>
+        <ChevronDown className="absolute right-2.5 size-3 shrink-0 opacity-80" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[8.25rem] p-1">
         {options.map((option) => {
@@ -242,9 +248,9 @@ export function BeneficiaryList({
   const { openBeneficiary, notify } = usePortalModals();
   const [source, setSource] = useState(serverData);
   const [data, setData] = useState(serverData);
-  const [search, setSearch] = useState(serverData.search);
   const [status, setStatus] = useState<BeneficiaryStatusFilter>(serverData.status);
   const [contact, setContact] = useState(serverData.contact);
+  const [company, setCompany] = useState(serverData.company);
   const [deleting, setDeleting] = useState<BeneficiarySummary | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
@@ -257,9 +263,9 @@ export function BeneficiaryList({
   if (source !== serverData) {
     setSource(serverData);
     setData(serverData);
-    setSearch(serverData.search);
     setStatus(serverData.status);
     setContact(serverData.contact);
+    setCompany(serverData.company);
   }
 
   useBeneficiarySaved((saved) => {
@@ -285,27 +291,20 @@ export function BeneficiaryList({
     [busyId, notify],
   );
 
-  const filtering = data.search.length > 0 || data.status !== "all" || data.contact.length > 0;
+  const filtering = data.company.length > 0 || data.status !== "all" || data.contact.length > 0;
   const emptyPortal = data.total === 0 && !filtering;
 
   const pushFilters = useCallback(
-    (next?: { search?: string; status?: BeneficiaryStatusFilter; contact?: string }) => {
+    (next?: { status?: BeneficiaryStatusFilter; contact?: string; company?: string }) => {
       const href = beneficiaryListHref({
-        search: next?.search ?? search,
         status: next?.status ?? status,
         contact: next?.contact ?? contact,
+        company: next?.company ?? company,
       });
       startTransition(() => router.push(href));
     },
-    [search, status, contact, router],
+    [status, contact, company, router],
   );
-
-  useEffect(() => {
-    const query = search.trim();
-    if (query === data.search) return;
-    const timer = window.setTimeout(() => pushFilters({ search: query }), 300);
-    return () => window.clearTimeout(timer);
-  }, [search, data.search, pushFilters]);
 
   function openEditor(beneficiary: Beneficiary) {
     setViewOpen(false);
@@ -347,7 +346,7 @@ export function BeneficiaryList({
         <StatCard
           label="Total beneficiaries"
           value={data.total}
-          href={beneficiaryListHref({ search, status: "all", contact })}
+          href={beneficiaryListHref({ status: "all", contact, company })}
           active={status === "all"}
           icon={Users}
           tone="total"
@@ -355,7 +354,7 @@ export function BeneficiaryList({
         <StatCard
           label="Active"
           value={data.active}
-          href={beneficiaryListHref({ search, status: "active", contact })}
+          href={beneficiaryListHref({ status: "active", contact, company })}
           active={status === "active"}
           icon={CircleCheck}
           tone="active"
@@ -363,7 +362,7 @@ export function BeneficiaryList({
         <StatCard
           label="Inactive"
           value={data.inactive}
-          href={beneficiaryListHref({ search, status: "inactive", contact })}
+          href={beneficiaryListHref({ status: "inactive", contact, company })}
           active={status === "inactive"}
           icon={CircleOff}
           tone="inactive"
@@ -372,31 +371,25 @@ export function BeneficiaryList({
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex shrink-0 flex-col gap-3 border-b p-4">
-          <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold">{filtering ? "Matching beneficiaries" : "All beneficiaries"}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {filtering
-                ? "Beneficiaries matching your search or client legal name."
-                : "Active and inactive beneficiary records."}
-            </p>
-          </div>
-          <form
-            className="flex items-center gap-2 overflow-x-auto"
-            onSubmit={(event) => {
-              event.preventDefault();
-              pushFilters({ search: search.trim() });
-            }}
-          >
-            <div className="relative min-w-56 flex-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Name, contact, email, GSTIN, or PAN"
-                aria-label="Search beneficiaries"
-                className="h-9 py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
-              />
-            </div>
+            <form className="flex items-center gap-2" onSubmit={(event) => event.preventDefault()}>
+            <FilterSelect
+              label="Company name"
+              value={company}
+              onChange={(value) => {
+                setCompany(value);
+                pushFilters({ company: value });
+              }}
+              className="w-52"
+            >
+              <option value="">Company name</option>
+              {data.companyNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </FilterSelect>
             <FilterSelect
               label="Client legal name"
               value={contact}
@@ -428,7 +421,13 @@ export function BeneficiaryList({
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </FilterSelect>
-          </form>
+            </form>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {filtering
+              ? "Beneficiaries matching the selected company, client, or status."
+              : "Active and inactive beneficiary records."}
+          </p>
         </div>
 
         {data.beneficiaries.length === 0 ? (
@@ -444,18 +443,18 @@ export function BeneficiaryList({
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full min-w-[64rem] border-separate border-spacing-0 text-sm">
+              <table className="w-full table-fixed border-separate border-spacing-0 text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="text-center text-primary-foreground">
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Company</th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">
+                    <th className="w-[16%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Company</th>
+                    <th className="w-[16%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">
                       Client legal name
                     </th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Email</th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Phone</th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">GSTIN</th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">Status</th>
-                    <th className="border-b border-primary bg-primary px-4 py-3 text-center align-middle font-medium">
+                    <th className="w-[22%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Email</th>
+                    <th className="w-[14%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Phone</th>
+                    <th className="w-[14%] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">GSTIN</th>
+                    <th className="w-[10rem] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">Status</th>
+                    <th className="w-[7.5rem] border-b border-primary bg-primary px-3 py-3 text-center align-middle font-medium">
                       Actions
                     </th>
                   </tr>
@@ -463,23 +462,32 @@ export function BeneficiaryList({
                 <tbody>
                   {data.beneficiaries.map((beneficiary) => (
                     <tr key={beneficiary.id} className="hover:bg-muted/40">
-                      <td className="border-b px-4 py-3 text-center align-middle font-medium">
-                        <button
-                          type="button"
-                          onClick={() => viewBeneficiary(beneficiary.id)}
-                          className="underline-offset-4 hover:underline"
-                        >
-                          {beneficiary.legalName}
-                        </button>
-                        {beneficiary.city ? (
-                          <p className="mt-1 text-xs font-normal text-muted-foreground">{beneficiary.city}</p>
-                        ) : null}
+                      <td className="border-b px-3 py-3 text-center align-middle font-medium">
+                        <div className="flex flex-col items-center gap-1.5">
+                          {beneficiary.logoUrl ? (
+                            <img
+                              src={beneficiary.logoUrl}
+                              alt=""
+                              className="size-8 rounded-md bg-white object-contain p-0.5"
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => viewBeneficiary(beneficiary.id)}
+                            className="break-words underline-offset-4 hover:underline"
+                          >
+                            {beneficiary.legalName}
+                          </button>
+                          {beneficiary.city ? (
+                            <p className="break-words text-xs font-normal text-muted-foreground">{beneficiary.city}</p>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="border-b px-4 py-3 text-center align-middle">{display(beneficiary.contactName)}</td>
-                      <td className="border-b px-4 py-3 text-center align-middle">{display(beneficiary.email)}</td>
-                      <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.phone)}</td>
-                      <td className="border-b px-4 py-3 whitespace-nowrap text-center align-middle">{display(beneficiary.gstin)}</td>
-                      <td className="border-b px-4 py-3 text-center align-middle">
+                      <td className="border-b px-3 py-3 break-words text-center align-middle">{display(beneficiary.contactName)}</td>
+                      <td className="border-b px-3 py-3 break-words text-center align-middle">{display(beneficiary.email)}</td>
+                      <td className="border-b px-3 py-3 break-words text-center align-middle">{display(beneficiary.phone)}</td>
+                      <td className="border-b px-3 py-3 break-words text-center align-middle">{display(beneficiary.gstin)}</td>
+                      <td className="border-b px-3 py-3 text-center align-middle">
                         <BeneficiaryStatusControl
                           beneficiary={beneficiary}
                           busy={busyId === beneficiary.id}
@@ -512,7 +520,7 @@ export function BeneficiaryList({
             </div>
             <p className="shrink-0 border-t px-4 py-3 text-sm text-muted-foreground">
               {data.truncated
-                ? `Showing the first ${data.beneficiaries.length} beneficiaries. Refine the search to see more.`
+                ? `Showing the first ${data.beneficiaries.length} beneficiaries. Refine the filters to see more.`
                 : data.beneficiaries.length === 1
                   ? "1 beneficiary."
                   : `${data.beneficiaries.length} beneficiaries.`}
@@ -542,6 +550,13 @@ export function BeneficiaryList({
               </div>
             ) : (
               <>
+                {viewing.logoUrl ? (
+                  <img
+                    src={viewing.logoUrl}
+                    alt=""
+                    className="mx-auto size-16 rounded-2xl bg-white object-contain p-1"
+                  />
+                ) : null}
                 <Badge variant={viewing.isActive ? "secondary" : "outline"} className="w-fit">
                   {viewing.isActive ? "Active" : "Inactive"}
                 </Badge>

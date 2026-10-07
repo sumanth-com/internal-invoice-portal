@@ -565,6 +565,7 @@ export function InvoiceForm({
                       ...beneficiaries.map((beneficiary) => ({
                         value: beneficiary.id,
                         label: `${beneficiary.legalName}${beneficiary.isActive ? "" : " (inactive)"}`,
+                        image: beneficiary.logoUrl,
                       })),
                     ]}
                     className="min-w-0 flex-1"
@@ -682,15 +683,6 @@ export function InvoiceForm({
           </Section>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section title="Bill to">
-              <input type="hidden" name="bill_to" value={composePartyFields(billToParty)} />
-              <PartyEditor
-                idPrefix="bill_to"
-                fields={billToParty}
-                onChange={setBillToParty}
-                error={errors.bill_to}
-              />
-            </Section>
             <Section title="Bill from">
               <input type="hidden" name="bill_from" value={composePartyFields(billFromParty)} />
               <PartyEditor
@@ -704,6 +696,15 @@ export function InvoiceForm({
                   Company settings are not saved yet, so Bill From starts empty. Enter it before issuing.
                 </p>
               ) : null}
+            </Section>
+            <Section title="Bill to">
+              <input type="hidden" name="bill_to" value={composePartyFields(billToParty)} />
+              <PartyEditor
+                idPrefix="bill_to"
+                fields={billToParty}
+                onChange={setBillToParty}
+                error={errors.bill_to}
+              />
             </Section>
           </div>
 

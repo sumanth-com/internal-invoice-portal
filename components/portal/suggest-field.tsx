@@ -326,7 +326,12 @@ export function ChoiceSelect({
   id: string;
   value: string;
   onValue: (value: string) => void;
-  choices: readonly { value: string; label: string; lines?: readonly string[] }[];
+  choices: readonly {
+    value: string;
+    label: string;
+    lines?: readonly string[];
+    image?: string | null;
+  }[];
   label: string;
   disabled?: boolean;
   invalid?: boolean;
@@ -343,7 +348,17 @@ export function ChoiceSelect({
     choices.findIndex((choice) => choice.value === value),
   );
   const selected = choices.find((choice) => choice.value === value);
+  const showImages = choices.some((choice) => choice.image);
   const { menuRef, host, frame } = useAnchoredMenu(open, rootRef);
+
+  function mark(image: string | null | undefined) {
+    if (!showImages) return null;
+    return image ? (
+      <img src={image} alt="" className="size-6 shrink-0 rounded-md bg-white object-contain p-0.5" />
+    ) : (
+      <span className="size-6 shrink-0" aria-hidden />
+    );
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -402,8 +417,11 @@ export function ChoiceSelect({
           invalid && "border-destructive",
         )}
       >
-        <span className={cn("truncate", display === "value" && "font-medium tabular-nums")}>
-          {display === "label" ? (selected?.label ?? value) : (selected?.value ?? value)}
+        <span className="flex min-w-0 items-center gap-2">
+          {mark(selected?.image)}
+          <span className={cn("truncate", display === "value" && "font-medium tabular-nums")}>
+            {display === "label" ? (selected?.label ?? value) : (selected?.value ?? value)}
+          </span>
         </span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
       </button>
@@ -422,15 +440,16 @@ export function ChoiceSelect({
               role="option"
               aria-selected={index === active}
               className={cn(
-                "flex w-full px-3 py-2 text-left",
-                choice.lines ? "items-start" : "items-center justify-between gap-3",
+                "flex w-full items-center gap-2 px-3 py-2 text-left",
+                choice.lines ? "items-start" : "justify-between gap-3",
                 index === active ? "bg-muted" : "hover:bg-muted/70",
               )}
               onMouseEnter={() => setActive(index)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(choice.value)}
             >
-              <span className="min-w-0">
+              {mark(choice.image)}
+              <span className="min-w-0 flex-1">
                 <span className="block">{choice.label}</span>
                 {choice.lines?.map((line, lineIndex) => (
                   <span key={lineIndex} className="block text-xs text-muted-foreground">

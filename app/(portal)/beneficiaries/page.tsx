@@ -14,6 +14,7 @@ type SearchParams = Promise<{
   q?: string | string[];
   status?: string | string[];
   contact?: string | string[];
+  company?: string | string[];
   notice?: string | string[];
   new?: string | string[];
 }>;
@@ -37,7 +38,7 @@ async function BeneficiariesContent({ searchParams }: { searchParams: SearchPara
 
   try {
     const [data, user, usedOnInvoices] = await Promise.all([
-      loadBeneficiaries(first(params.q), first(params.status), first(params.contact)),
+      loadBeneficiaries(first(params.q), first(params.status), first(params.contact), first(params.company)),
       getPortalUser(),
       invoiceBeneficiaryIds(),
     ]);

@@ -204,7 +204,11 @@ export function PaymentList({
             }}
             choices={[
               { value: "all", label: "All beneficiaries" },
-              ...beneficiaries.map((item) => ({ value: item.id, label: item.name })),
+              ...beneficiaries.map((item) => ({
+                value: item.id,
+                label: item.name,
+                image: item.logoUrl,
+              })),
             ]}
           />
           <ChoiceSelect

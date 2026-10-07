@@ -60,9 +60,18 @@ export function BeneficiaryDetail({
           <Link href="/beneficiaries" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
             Beneficiaries
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-            {beneficiary.legalName}
-          </h1>
+          <div className="mt-2 flex items-center gap-3">
+            {beneficiary.logoUrl ? (
+              <img
+                src={beneficiary.logoUrl}
+                alt=""
+                className="size-12 shrink-0 rounded-xl bg-white object-contain p-1"
+              />
+            ) : null}
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {beneficiary.legalName}
+            </h1>
+          </div>
           <div className="mt-2">
             <Badge variant={beneficiary.isActive ? "secondary" : "outline"}>
               {beneficiary.isActive ? "Active" : "Inactive"}

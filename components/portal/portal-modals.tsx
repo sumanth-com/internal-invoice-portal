@@ -343,7 +343,7 @@ export function PortalModalsProvider({ children }: { children: ReactNode }) {
       <Modal
         open={beneficiaryOpen}
         onClose={closeBeneficiary}
-        size="md"
+        size="wide"
         title={editing ? "Edit beneficiary" : "Add beneficiary"}
         description={
           editing

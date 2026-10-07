@@ -1,6 +1,7 @@
 import {
   BENEFICIARY_LIST_LIMIT,
   isBeneficiaryId,
+  normalizeBeneficiaryCompany,
   normalizeBeneficiaryContact,
   normalizeBeneficiarySearch,
   normalizeBeneficiaryStatus,
@@ -9,6 +10,7 @@ import {
   type BeneficiaryStatusFilter,
   type BeneficiarySummary,
 } from "@/lib/beneficiary";
+import { signBeneficiaryLogoMap } from "@/lib/beneficiary-logo";
 import { activeOwnerId } from "@/lib/owner-scope";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,6 +30,7 @@ type BeneficiaryRow = {
   pan: string | null;
   notes: string | null;
   is_active: boolean;
+  logo_path: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +45,7 @@ function mapSummary(row: Pick<
   | "gstin"
   | "city"
   | "is_active"
+  | "logo_path"
 >): BeneficiarySummary {
   return {
     id: row.id,
@@ -52,15 +56,17 @@ function mapSummary(row: Pick<
     gstin: row.gstin,
     city: row.city,
     isActive: row.is_active,
+    logoUrl: null,
   };
 }
 
 export const BENEFICIARY_COLUMNS =
-  "id, legal_name, contact_name, email, phone, address_line1, address_line2, city, state, postal_code, country, gstin, pan, notes, is_active, created_at, updated_at";
+  "id, legal_name, contact_name, email, phone, address_line1, address_line2, city, state, postal_code, country, gstin, pan, notes, is_active, logo_path, created_at, updated_at";
 
 export function mapBeneficiary(row: BeneficiaryRow): Beneficiary {
   return {
     ...mapSummary(row),
+    logoPath: row.logo_path,
     addressLine1: row.address_line1,
     addressLine2: row.address_line2,
     state: row.state,
@@ -91,16 +97,18 @@ export async function loadBeneficiaries(
   rawSearch: string | undefined,
   rawStatus: string | undefined,
   rawContact: string | undefined,
+  rawCompany: string | undefined,
 ): Promise<BeneficiaryListData> {
   const search = normalizeBeneficiarySearch(rawSearch);
   const status: BeneficiaryStatusFilter = normalizeBeneficiaryStatus(rawStatus);
   const contact = normalizeBeneficiaryContact(rawContact);
+  const company = normalizeBeneficiaryCompany(rawCompany);
   const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
 
   let listQuery = supabase
     .from("beneficiaries")
-    .select("id, legal_name, contact_name, email, phone, gstin, city, is_active")
+    .select("id, legal_name, contact_name, email, phone, gstin, city, is_active, logo_path")
     .eq("created_by", ownerId)
     .order("legal_name", { ascending: true })
     .limit(BENEFICIARY_LIST_LIMIT + 1);
@@ -108,13 +116,13 @@ export async function loadBeneficiaries(
   if (status === "active") listQuery = listQuery.eq("is_active", true);
   if (status === "inactive") listQuery = listQuery.eq("is_active", false);
   if (contact) listQuery = listQuery.eq("contact_name", contact);
+  if (company) listQuery = listQuery.eq("legal_name", company);
 
   const namesQuery = supabase
     .from("beneficiaries")
-    .select("contact_name")
+    .select("legal_name, contact_name")
     .eq("created_by", ownerId)
-    .not("contact_name", "is", null)
-    .order("contact_name", { ascending: true });
+    .order("legal_name", { ascending: true });
 
   if (search) {
     const pattern = `"%${search.replaceAll('"', "")}%"`;
@@ -144,25 +152,42 @@ export async function loadBeneficiaries(
 
   const rows = data ?? [];
   const truncated = rows.length > BENEFICIARY_LIST_LIMIT;
+  const nameRows = namesResult.data ?? [];
   const contactNames = [
     ...new Set(
-      (namesResult.data ?? [])
+      nameRows
         .map((row) => row.contact_name?.trim() ?? "")
         .filter((name) => name.length > 0),
     ),
-  ];
+  ].sort((left, right) => left.localeCompare(right, "en"));
+  const companyNames = [
+    ...new Set(
+      nameRows
+        .map((row) => row.legal_name?.trim() ?? "")
+        .filter((name) => name.length > 0),
+    ),
+  ].sort((left, right) => left.localeCompare(right, "en"));
+
+  const visible = truncated ? rows.slice(0, BENEFICIARY_LIST_LIMIT) : rows;
+  const logos = await signBeneficiaryLogoMap(
+    supabase,
+    visible.map((row) => row.logo_path),
+  );
 
   return {
-    beneficiaries: (truncated ? rows.slice(0, BENEFICIARY_LIST_LIMIT) : rows).map(
-      mapSummary,
-    ),
+    beneficiaries: visible.map((row) => ({
+      ...mapSummary(row),
+      logoUrl: row.logo_path ? logos.get(row.logo_path) ?? null : null,
+    })),
     total,
     active,
     inactive,
     search,
     status,
     contact,
+    company,
     contactNames,
+    companyNames,
     truncated,
   };
 }
@@ -181,7 +206,36 @@ export async function loadBeneficiary(id: string): Promise<Beneficiary | null> {
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapBeneficiary(data) : null;
+  return data ? signBeneficiaryRecord(supabase, mapBeneficiary(data)) : null;
+}
+
+export async function signBeneficiaryRecord(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  beneficiary: Beneficiary,
+): Promise<Beneficiary> {
+  if (!beneficiary.logoPath) return { ...beneficiary, logoUrl: null };
+  const logos = await signBeneficiaryLogoMap(supabase, [beneficiary.logoPath]);
+  return { ...beneficiary, logoUrl: logos.get(beneficiary.logoPath) ?? null };
+}
+
+export async function beneficiaryLogoUrls(ids: string[]) {
+  const unique = [...new Set(ids.filter((id) => id.length > 0))];
+  const urls = new Map<string, string | null>();
+  if (unique.length === 0) return urls;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("beneficiaries")
+    .select("id, logo_path")
+    .in("id", unique);
+  if (error) throw error;
+  const signed = await signBeneficiaryLogoMap(
+    supabase,
+    (data ?? []).map((row) => row.logo_path),
+  );
+  for (const row of data ?? []) {
+    urls.set(row.id, row.logo_path ? signed.get(row.logo_path) ?? null : null);
+  }
+  return urls;
 }
 
 export async function invoiceBeneficiaryIds() {

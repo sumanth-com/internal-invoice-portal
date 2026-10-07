@@ -1,4 +1,5 @@
 import { isBeneficiaryId } from "@/lib/beneficiary";
+import { signBeneficiaryLogoMap } from "@/lib/beneficiary-logo";
 import { currentMonthRange, isInvoiceId, roundMoney } from "@/lib/invoice";
 import {
   isPaymentMode,
@@ -109,12 +110,12 @@ export async function loadPaymentBeneficiaries(): Promise<PaymentBeneficiaryOpti
   const ownerId = (await activeOwnerId()) ?? "";
   const supabase = await createClient();
   const pageSize = 1000;
-  const rows: PaymentBeneficiaryOption[] = [];
+  const rows: { id: string; name: string; logoPath: string | null }[] = [];
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from("beneficiaries")
-      .select("id, legal_name")
+      .select("id, legal_name, logo_path")
       .eq("created_by", ownerId)
       .order("legal_name", { ascending: true })
       .order("id", { ascending: true })
@@ -122,12 +123,24 @@ export async function loadPaymentBeneficiaries(): Promise<PaymentBeneficiaryOpti
     if (error) throw error;
     const page = data ?? [];
     for (const row of page) {
-      rows.push({ id: row.id, name: row.legal_name?.trim() || "—" });
+      rows.push({
+        id: row.id,
+        name: row.legal_name?.trim() || "—",
+        logoPath: row.logo_path,
+      });
     }
     if (page.length < pageSize) break;
   }
 
-  return rows;
+  const logos = await signBeneficiaryLogoMap(
+    supabase,
+    rows.map((row) => row.logoPath),
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    logoUrl: row.logoPath ? logos.get(row.logoPath) ?? null : null,
+  }));
 }
 
 export async function loadPayments(raw: {

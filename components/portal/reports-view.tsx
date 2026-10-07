@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/portal/skeletons";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,7 @@ export function ReportsView({
   invoices: ReportInvoice[];
   type: ReportType;
   query: string;
-  beneficiaries: { id: string; name: string }[];
+  beneficiaries: { id: string; name: string; logoUrl: string | null }[];
   beneficiary: string;
 }) {
   const router = useRouter();
@@ -200,23 +201,27 @@ export function ReportsView({
                 </option>
               ))}
             </FilterSelect>
-            <FilterSelect
+            <ChoiceSelect
+              id="report-filter-beneficiary"
               label="Beneficiary"
               value={client}
-              onChange={(value) => {
+              display="label"
+              className="w-52"
+              menuClassName="min-w-56"
+              onValue={(value) => {
                 const next = beneficiaries.some((item) => item.id === value) ? value : "";
                 setClient(next);
                 pushFilters({ beneficiary: next });
               }}
-              className="w-52"
-            >
-              <option value="">All beneficiaries</option>
-              {beneficiaries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </FilterSelect>
+              choices={[
+                { value: "", label: "All beneficiaries" },
+                ...beneficiaries.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                  image: item.logoUrl,
+                })),
+              ]}
+            />
             <Input
               type="date"
               value={from}

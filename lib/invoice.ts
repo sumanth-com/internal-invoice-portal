@@ -70,6 +70,7 @@ export type InvoicePartyOption = {
   gstin: string | null;
   pan: string | null;
   isActive: boolean;
+  logoUrl: string | null;
 };
 
 export type BankAccountOption = {
@@ -147,6 +148,7 @@ export type InvoiceSummary = {
 export type InvoiceBeneficiaryOption = {
   id: string;
   name: string;
+  logoUrl: string | null;
 };
 
 export type InvoiceListData = {
@@ -155,6 +157,7 @@ export type InvoiceListData = {
   search: string;
   beneficiary: string;
   beneficiaries: InvoiceBeneficiaryOption[];
+  invoiceNumbers: string[];
   status: InvoiceStatus | "all";
   payment: InvoicePaymentFilter;
   from: string;

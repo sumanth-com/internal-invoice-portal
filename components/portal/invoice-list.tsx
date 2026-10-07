@@ -5,6 +5,7 @@ import { DeleteDraftDialog } from "@/components/portal/invoice-actions";
 import { IconAction } from "@/components/portal/icon-action";
 import { InvoiceNotice } from "@/components/portal/invoice-notice";
 import { usePortalModals } from "@/components/portal/portal-modals";
+import { ChoiceSelect } from "@/components/portal/suggest-field";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,10 +27,10 @@ import {
 } from "@/lib/invoice";
 import { requestNotificationRefresh } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, Eye, Pencil, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Eye, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useCallback, useEffect, useState, type ReactNode } from "react";
+import { startTransition, useCallback, useState, type ReactNode } from "react";
 
 const fieldClass =
   "h-9 w-full appearance-none rounded-md border border-input bg-transparent py-0 text-sm shadow-sm outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0";
@@ -60,7 +61,7 @@ function listDescription(data: InvoiceListData, filtering: boolean) {
   if (data.from && data.to) return `Invoices from ${formatInvoiceDate(data.from)} to ${formatInvoiceDate(data.to)}.`;
   if (data.from) return `Invoices from ${formatInvoiceDate(data.from)} onward.`;
   if (data.to) return `Invoices through ${formatInvoiceDate(data.to)}.`;
-  if (filtering) return "Invoices matching your search and filters.";
+  if (filtering) return "Invoices matching the selected number, beneficiary, or dates.";
   return "Every invoice in the portal.";
 }
 
@@ -138,13 +139,6 @@ export function InvoiceList({
     [search, beneficiary, from, to, router],
   );
 
-  useEffect(() => {
-    const query = search.trim();
-    if (query === data.search) return;
-    const timer = window.setTimeout(() => pushFilters({ search: query }), 300);
-    return () => window.clearTimeout(timer);
-  }, [search, data.search, pushFilters]);
-
   const applyStatus = useCallback(
     async (invoice: InvoiceSummary, next: InvoiceStatus) => {
       setBusyId(invoice.id);
@@ -190,44 +184,46 @@ export function InvoiceList({
 
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="flex shrink-0 flex-col gap-3 border-b p-4">
-          <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold">{filtering ? "Matching invoices" : "All invoices"}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{listDescription(data, filtering)}</p>
-          </div>
-          <form
-            className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1.6fr)_minmax(12rem,1fr)_9.75rem_9.75rem]"
-            onSubmit={(event) => {
-              event.preventDefault();
-              pushFilters({ search: search.trim() });
-            }}
-          >
-            <div className="relative min-w-0 sm:col-span-2 xl:col-span-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Invoice number"
-                aria-label="Search by invoice number"
-                className="h-9 w-full py-0 pl-8 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
-              />
-            </div>
+            <form className="flex flex-wrap items-center justify-end gap-2" onSubmit={(event) => event.preventDefault()}>
             <FilterSelect
+              label="Invoice number"
+              value={data.invoiceNumbers.includes(search) ? search : ""}
+              onChange={(value) => {
+                setSearch(value);
+                pushFilters({ search: value });
+              }}
+              className="w-44"
+            >
+              <option value="">Invoice number</option>
+              {data.invoiceNumbers.map((number) => (
+                <option key={number} value={number}>
+                  {number}
+                </option>
+              ))}
+            </FilterSelect>
+            <ChoiceSelect
+              id="invoice-filter-beneficiary"
               label="Beneficiary"
               value={beneficiary}
-              onChange={(value) => {
+              display="label"
+              className="w-52"
+              menuClassName="min-w-56"
+              onValue={(value) => {
                 const next = data.beneficiaries.some((item) => item.id === value) ? value : "";
                 setBeneficiary(next);
                 pushFilters({ beneficiary: next });
               }}
-              className="w-full"
-            >
-              <option value="">Beneficiary</option>
-              {data.beneficiaries.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </FilterSelect>
+              choices={[
+                { value: "", label: "Beneficiary" },
+                ...data.beneficiaries.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                  image: item.logoUrl,
+                })),
+              ]}
+            />
             <Input
               type="date"
               value={from}
@@ -239,7 +235,7 @@ export function InvoiceList({
                 setTo(nextTo);
                 pushFilters({ from: value, to: nextTo });
               }}
-              className="h-9 w-full min-w-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
+              className="h-9 w-40 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
             <Input
               type="date"
@@ -251,9 +247,11 @@ export function InvoiceList({
                 setTo(nextTo);
                 pushFilters({ to: nextTo });
               }}
-              className="h-9 w-full min-w-0 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
+              className="h-9 w-40 py-0 text-sm shadow-sm outline-none ring-0 focus-visible:ring-0"
             />
-          </form>
+            </form>
+          </div>
+          <p className="text-sm text-muted-foreground">{listDescription(data, filtering)}</p>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -396,12 +394,12 @@ function StatusControl({
         disabled={busy}
         aria-label={`Status for ${invoice.invoiceNumber}`}
         className={cn(
-          "inline-flex h-7 w-[8.25rem] items-center justify-between gap-1 rounded-full px-2.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait",
+          "relative inline-flex h-7 w-[8.25rem] items-center justify-center rounded-full px-6 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait",
           statusPillClass(invoice.status),
         )}
       >
-        <span>{statusLabel(invoice.status)}</span>
-        <ChevronDown className="size-3 shrink-0 opacity-80" />
+        <span className="text-center">{statusLabel(invoice.status)}</span>
+        <ChevronDown className="absolute right-2.5 size-3 shrink-0 opacity-80" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[8.25rem] p-1">
         {statuses.map((status) => {
